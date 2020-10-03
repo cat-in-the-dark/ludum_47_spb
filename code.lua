@@ -44,10 +44,44 @@ function deepcopy(orig)
   return copy
 end
 
+-- math
+
+function det( a,b,c,d )
+  return a*d - b*c
+end
+
+function line_crossv( s1,e1,s2,e2 )
+  local x,y = line_cross(s1.x,s1.y,e1.x,e1.y,s2.x,s2.y,e2.x,e2.y)
+  if x == nil or y == nil then
+    return nil
+  else
+    return v2(x,y)
+  end
+end
+
+function line_cross( x1,y1,x2,y2,x3,y3,x4,y4 )
+  local pxup,pxdn,pyup,pydn
+  pxup = det(det(x1,y1,x2,y2), x1-x2, det(x3,y3,x4,y4), x3-x4)
+  pxdn = det(x1-x2, y1-y2, x3-x4, y3-y4)
+
+  pyup = det(det(x1,y1,x2,y2), y1-y2, det(x3,y3,x4,y4), y3-y4)
+  pydn = det(x1-x2, y1-y2, x3-x4, y3-y4)
+
+  if pxdn == 0 or pydn == 0 then
+    return nil,nil
+  else
+    return pxup/pxdn, pyup/pydn
+  end
+end
+
 -- 2d
 
 function v2( x,y )
   return{x=x,y=y}
+end
+
+function v2add( v1,v2 )
+  return {x=v1.x+v2.x,y=v1.y+v2.y}
 end
 
 function v2dist( v1,v2 )
@@ -58,6 +92,14 @@ end
 
 function v2angle( v1,v2 )
   return -math.atan2(v2.y-v1.y, v2.x-v1.x)
+end
+
+function linev( v1,v2,c )
+  line(v1.x,v1.y,v2.x,v2.y,c)
+end
+
+function circv( v,r,c )
+  circ(v.x,v.y,r,c)
 end
 
 -- 3d
@@ -195,36 +237,68 @@ function link_rails( p,n,f,b,reverse )
 end
 
 function add_rail( rails, parent, r )
-  local px,py
   if parent == nil then
     r.angle = r.da
   else
     r.angle = parent.angle + r.da
-    px = parent.pos.x + parent.len * cos(parent.angle)
-    py = parent.pos.y - parent.len * sin(parent.angle)
-    r.pos = v2(px,py)
+    r.pos = v2add(parent.pos, v2(parent.len * cos(parent.angle), -1 * parent.len * sin(parent.angle)))
   end
+  r.end_pos = v2add(r.pos, v2(r.len * cos(r.angle), -1 * r.len * sin(r.angle)))
   table.insert(rails, r)
 end
 
 function loop_rails( r1, r2, reverse )
   r1.angle = v2angle(r1.pos, r2.pos)
   r1.len = v2dist(r2.pos, r1.pos)
+  r1.end_pos = v2add(r1.pos, v2(r1.len * cos(r1.angle), -1 * r1.len * sin(r1.angle)))
+end
+
+function calc_rails( r )
+  local rw = 4  -- rail width
+  local lnorm,rnorm = r.angle + PI / 2, r.angle - PI / 2
+  local lstart,lend,rstart,rend,dl,dr
+  dl = v2(rw * cos(lnorm), -rw * sin(lnorm))
+  dr = v2(rw * cos(rnorm), -rw * sin(rnorm))
+  lstart = v2add(r.pos, dl)
+  lend = v2add(r.end_pos, dl)
+  rstart = v2add(r.pos, dr)
+  rend = v2add(r.end_pos, dr)
+  return lstart,lend,rstart,rend
 end
 
 function draw_rail( r,c )
   local x1,y1
   if r.angle == nil then r.angle = r.da end
-  x1 = r.pos.x + r.len * cos(r.angle)
-  y1 = r.pos.y - r.len * sin(r.angle)
-  line(r.pos.x, r.pos.y, x1, y1, c)
+  local lstart,lend,rstart,rend = calc_rails(r)
+  -- connecting rails
+  if r.prev ~= nil then
+    local p = r.prev[1].val
+    local plstart,plend,prstart,prend = calc_rails(p)
+    local cl,cr
+    cl = line_crossv(lstart,lend,plstart,plend)
+    cr = line_crossv(rstart,rend,prstart,prend)
+    if cl ~= nil then lstart = cl end
+    if cr ~= nil then rstart = cr end
+  end
+  if r.next ~= nil then
+    local n = r.next[1].val
+    local nlstart,nlend,nrstart,nrend = calc_rails(n)
+    local cl,cr
+    cl = line_crossv(lstart,lend,nlstart,nlend)
+    cr = line_crossv(rstart,rend,nrstart,nrend)
+    if cl ~= nil then lend = cl end
+    if cr ~= nil then rend = cr end
+  end
+
+  linev(lstart,lend,c)
+  linev(rstart,rend,c)
 
   -- draw switch
   if r.next ~= nil and #r.next > 1 then
-    circ(x1, y1, 3, 3)
+    circv(r.end_pos, 3, 3)
   end
   if r.prev ~= nil and #r.prev > 1 then
-    circ(r.pos.x, r.pos.y, 3, 3)
+    circv(r.pos, 3, 3)
   end
 end
 
@@ -337,6 +411,7 @@ rail = {
   da = 30.0 * PI / 180,
   len = 40.0,
   pos = v2(50,100),
+  end_pos = v2(0,0),
   next = nil,
   prev = nil,
 }
@@ -378,7 +453,7 @@ loop_rails(r6, r2)
 link_rails(r5, r6, true, true, false)
 link_rails(r6, r1, true, false, true)
 link_rails(r1, r6, true, false, true)
--- r1.next_active=2
+r1.next_active=2
 train.rail = r1
 
 win = false
