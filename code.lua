@@ -145,18 +145,22 @@ end
 
 -- rails
 
-function link_rails( p,n )
-  if p.next == nil then
-    p.next = {n}
-    p.next_active = 1
-  else
-    table.insert(p.next, n)
+function link_rails( p,n,f,b,reverse )
+  if f then
+    if p.next == nil then
+      p.next = {{val=n, rev=reverse}}
+      p.next_active = 1
+    else
+      table.insert(p.next, {val=n, rev=reverse})
+    end
   end
-  if n.prev == nil then
-    n.prev = {p}
-    n.prev_active = 1
-  else
-    table.insert(n.prev, p)
+  if b then
+    if n.prev == nil then
+      n.prev = {{val=p, rev=reverse}}
+      n.prev_active = 1
+    else
+      table.insert(n.prev, {val=p, rev=reverse})
+    end
   end
 end
 
@@ -169,13 +173,11 @@ function add_rail( rails, parent, r )
     px = parent.pos.x + parent.len * cos(parent.angle)
     py = parent.pos.y - parent.len * sin(parent.angle)
     r.pos = v2(px,py)
-    link_rails(parent, r)
   end
   table.insert(rails, r)
 end
 
-function loop_rails( r1, r2 )
-  link_rails(r1, r2)
+function loop_rails( r1, r2, reverse )
   r1.angle = v2angle(r1.pos, r2.pos)
   r1.len = v2dist(r2.pos, r1.pos)
 end
@@ -186,7 +188,43 @@ function draw_rail( r,c )
   x1 = r.pos.x + r.len * cos(r.angle)
   y1 = r.pos.y - r.len * sin(r.angle)
   line(r.pos.x, r.pos.y, x1, y1, c)
-  return x1, y1
+
+  -- draw switch
+  if r.next ~= nil and #r.next > 1 then
+    circ(x1, y1, 3, 3)
+  end
+  if r.prev ~= nil and #r.prev > 1 then
+    circ(r.pos.x, r.pos.y, 3, 3)
+  end
+end
+
+function move_train( t )
+  if t.rev then
+    t.progress = t.progress - t.speed
+    if t.progress <= 0 then
+      local pr = t.rail.prev[t.rail.prev_active]
+      t.rail = pr.val
+      t.progress = pr.val.len
+      t.rev = not pr.rev
+      if t.rev then t.progress = t.rail.len else t.progress = 0 end
+    end
+  else
+    t.progress = t.progress + t.speed
+    if t.progress >= t.rail.len then
+      local nr = t.rail.next[t.rail.next_active]
+      t.rail = nr.val
+      t.rev = nr.rev
+      if t.rev then t.progress = t.rail.len else t.progress = 0 end
+    end
+  end
+end
+
+function draw_train( t )
+  local r = t.rail
+  local x,y = r.pos.x, r.pos.y
+  x = x + t.progress * cos(r.angle)
+  y = y - t.progress * sin(r.angle)
+  circ(x,y,5,4)
 end
 
 -- objects
@@ -267,64 +305,68 @@ cam.z = -0.8
 
 rail = {
   da = 30.0 * PI / 180,
-  len = 22.0,
-  pos = v2(120,130),
+  len = 40.0,
+  pos = v2(50,100),
   next = nil,
   prev = nil,
 }
 
 RAILS = {}
 
-start_rail = deepcopy(rail)
-cr = start_rail
-switch1 = nil
-switch2 = nil
+train = {
+  rail = nil,
+  speed = 1.0,
+  progress = 0,
+  rev = false
+}
 
-add_rail(RAILS, nil, start_rail)
+-- init
 
-for i=1,10 do
-  local nr = deepcopy(rail)
-  add_rail(RAILS, cr, nr)
-  cr = nr
-  if i == 5 then
-    local new_cr = cr
-    switch1 = cr
-    for j=1,6 do
-      nr = deepcopy(rail)
-      nr.da = 60 * PI / 180
-      add_rail(RAILS, new_cr, nr)
-      new_cr = nr
-    end
-    loop_rails(new_cr, cr)
-  end
+r1 = deepcopy(rail)
+r1.da = 0
+add_rail(RAILS, nil, r1)
+r2 = deepcopy(rail)
+r2.da = 0
+add_rail(RAILS, r1, r2)
+link_rails(r1, r2, true, true, false)
+r3 = deepcopy(rail)
+r3.da = 60 * PI / 180
+add_rail(RAILS, r2, r3)
+link_rails(r2, r3, true, true, false)
+-- r2.next_active=2
+r4 = deepcopy(rail)
+r4.da = 0
+add_rail(RAILS, r2, r4)
+link_rails(r2, r4, true, true, false)
+r5 = deepcopy(rail)
+r5.da = 60 * PI / 180
+add_rail(RAILS, r3, r5)
+link_rails(r3, r5, true, true, false)
+r6 = deepcopy(rail)
+add_rail(RAILS, r5, r6)
+loop_rails(r6, r2)
+link_rails(r5, r6, true, true, false)
+link_rails(r6, r1, true, false, true)
+link_rails(r1, r6, true, false, true)
+r1.next_active=2
+train.rail = r1
+
+win = false
+function game_win()
+  win = true
 end
 
-loop_rails(cr, start_rail)
-
-dt = 0
-current = start_rail
-forward = true
 function TIC()
-  dt = dt + 1
-  if dt % 10 == 0 then
-    if forward then
-      current = current.next[current.next_active]
-    else
-      current = current.prev[current.prev_active]
-    end
-  end
   cls(14)
 
-  if btn(UP) then
-    switch1.next_active = 2
-    switch1.prev_active = 2
+  draw_train(train)
+  for i,v in ipairs(RAILS) do
+    draw_rail(v, i)
   end
-  if btn(DOWN) then
-    switch1.next_active = 1
-    switch1.prev_active = 1
-  end
-  if btn(LEFT) then forward = false end
-  if btn(RIGHT) then forward = true end
+
+  if win then return end
+
+  move_train(train)
 
   -- if btn(UP) then cam.y = cam.y - 0.1 end
   -- if btn(DOWN) then cam.y = cam.y + 0.1 end
@@ -334,11 +376,4 @@ function TIC()
   -- if btn(BTN_X) then cam.z = cam.z + 0.05 end
   -- fig_3d(octa_3d)
   -- rot_3d(octa_3d, center, rot_angle)
-  for i,v in ipairs(RAILS) do
-    if current == v then
-      draw_rail(v, 1)
-    else
-      draw_rail(v, 2)
-    end
-  end
 end
