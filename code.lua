@@ -17,6 +17,7 @@ KEY_A = 01
 KEY_S = 19
 KEY_D = 4
 KEY_Q = 17
+KEY_R = 18
 KEY_E = 5
 UP=0
 DOWN=1
@@ -188,18 +189,27 @@ function fig_3d( fig )
 end
 
 function fig3d_add( f1,f2 )
-  local vertsize = #f1.vert
-  for i,v in ipairs(f2.vert) do
-    table.insert(f1.vert,v)
-  end
-
-  for i,v in ipairs(f2.edges) do
-    local ne = {}
-    for j,e in ipairs(v) do
-      table.insert(ne, e + vertsize)
+  if f1.vert == nil then
+    f1.vert = deepcopy(f2.vert)
+    f1.edges = deepcopy(f2.edges)
+  else
+    local vertsize = #f1.vert
+    for i,v in ipairs(f2.vert) do
+      table.insert(f1.vert,v)
     end
-    table.insert(f1.edges, ne)
+
+    for i,v in ipairs(f2.edges) do
+      local ne = {}
+      for j,e in ipairs(v) do
+        table.insert(ne, e + vertsize)
+      end
+      table.insert(f1.edges, ne)
+    end
   end
+end
+
+function fig3d_addv( f,v1,v2 )
+  return fig3d_add(f, {vert={v1,v2},edges={{1,2}}})
 end
 
 function rot_2d( x0, y0, cx, cy, angle )
@@ -270,6 +280,27 @@ function calc_rails( r )
 end
 
 function make_rails_3d( r, ls,le,rs,re )
+  local model = deepcopy(obj_3d)
+  local l1,l2,l3,l4,l5,l6,r1,r2,r3,r4,r5,r6
+  l1 = v3(ls.x,ls.y,0)
+  l2 = v3(le.x,le.y,0)
+  fig3d_addv(model, l1,l2)
+  l3 = v3add(l1,v3(0,0,1))
+  l4 = v3add(l2,v3(0,0,1))
+  fig3d_addv(model, l3,l4)
+  l5 = v3add(l3,v3(-1,0,0))
+  l6 = v3add(l4,v3(-1,0,0))
+  fig3d_addv(model, l5,l6)
+  r1 = v3(rs.x,rs.y,0)
+  r2 = v3(re.x,re.y,0)
+  fig3d_addv(model, r1,r2)
+  r3 = v3add(r1,v3(0,0,1))
+  r4 = v3add(r2,v3(0,0,1))
+  fig3d_addv(model, r3,r4)
+  r5 = v3add(r3,v3(1,0,0))
+  r6 = v3add(r4,v3(1,0,0))
+  fig3d_addv(model, r5,r6)
+  fig3d_add(r.model, model)
 end
 
 function init_rail_gfx( r )
@@ -316,6 +347,10 @@ function draw_rail( r,c )
   end
 end
 
+function draw_rail_3d( r,c )
+  fig_3d(r.model)
+end
+
 function move_train( t )
   if t.rev then
     t.progress = t.progress - t.speed
@@ -342,7 +377,21 @@ function draw_train( t )
   circv(v2add(r.pos, v2(t.progress * cos(r.angle), -t.progress * sin(r.angle))), 5,4)
 end
 
+function draw_train_3d( t )
+  local r = t.rail
+  local cpos = v2add(r.pos, v2(t.progress * cos(r.angle), -t.progress * sin(r.angle)))
+  cam.x = cpos.x
+  cam.y = cpos.y
+  cam.rz = -r.angle + PI / 2
+  if t.rev then cam.rz = cam.rz - PI end
+end
+
 -- objects
+
+obj_3d = {
+  vert={},
+  edges={}
+}
 
 sq_3d = {
   vert = {
@@ -414,9 +463,11 @@ rot_angle = {
   k = 0.01
 }
 
-cam.x = 1.5
-cam.y = 1.5
-cam.z = 1.5
+cam.x = 50
+cam.y = 100
+cam.z = 17
+cam.rx = 2
+cam.rz = PI / 2
 
 rail = {
   da = 30.0 * PI / 180,
@@ -433,7 +484,7 @@ RAILS = {}
 
 train = {
   rail = nil,
-  speed = 1.0,
+  speed = 0.4,
   progress = 0,
   rev = false
 }
@@ -466,7 +517,7 @@ loop_rails(r6, r2)
 link_rails(r5, r6, true, true, false)
 link_rails(r6, r1, true, false, true)
 link_rails(r1, r6, true, false, true)
-r1.next_active=2
+r1.next_active=1
 train.rail = r1
 
 win = false
@@ -478,30 +529,37 @@ for i,v in ipairs(RAILS) do
   init_rail_gfx(v)
 end
 
+draw_train_3d(train)
+
 function TIC()
   cls(14)
 
   draw_train(train)
   for i,v in ipairs(RAILS) do
+    draw_rail_3d(v,i)
     draw_rail(v, i)
   end
 
   if win then return end
 
-  move_train(train)
+  if key(KEY_R) then
+    draw_train_3d(train)
+    move_train(train)
+  end
 
-  -- if key(KEY_S) then cam.y = cam.y - 0.1 end
-  -- if key(KEY_W) then cam.y = cam.y + 0.1 end
-  -- if key(KEY_A) then cam.x = cam.x - 0.1 end
-  -- if key(KEY_D) then cam.x = cam.x + 0.1 end
-  -- if key(KEY_Q) then cam.z = cam.z - 0.1 end
-  -- if key(KEY_E) then cam.z = cam.z + 0.1 end
-  -- if btn(UP) then cam.ry = cam.ry - 0.01 end
-  -- if btn(DOWN) then cam.ry = cam.ry + 0.01 end
-  -- if btn(LEFT) then cam.rx = cam.rx - 0.01 end
-  -- if btn(RIGHT) then cam.rx = cam.rx + 0.01 end
-  -- if btn(BTN_Z) then cam.rz = cam.rz - 0.01 end
-  -- if btn(BTN_X) then cam.rz = cam.rz + 0.01 end
+  if key(KEY_S) then cam.y = cam.y - 0.1 end
+  if key(KEY_W) then cam.y = cam.y + 0.1 end
+  if key(KEY_A) then cam.x = cam.x - 0.1 end
+  if key(KEY_D) then cam.x = cam.x + 0.1 end
+  if key(KEY_Q) then cam.z = cam.z - 0.1 end
+  if key(KEY_E) then cam.z = cam.z + 0.1 end
+  if btn(UP) then cam.ry = cam.ry - 0.01 end
+  if btn(DOWN) then cam.ry = cam.ry + 0.01 end
+  if btn(LEFT) then cam.rx = cam.rx - 0.01 end
+  if btn(RIGHT) then cam.rx = cam.rx + 0.01 end
+  if btn(BTN_Z) then cam.rz = cam.rz - 0.01 end
+  if btn(BTN_X) then cam.rz = cam.rz + 0.01 end
+  print(sf("%.2f %.2f %.2f %.2f %.2f %.2f %.2f", train.rail.angle,cam.x,cam.y,cam.z,cam.rx,cam.ry,cam.rz))
   -- fig_3d(octa_3d)
   -- rot_3d(octa_3d, center, rot_angle)
 end
