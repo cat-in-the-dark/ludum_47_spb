@@ -145,6 +145,21 @@ end
 
 -- rails
 
+function link_rails( p,n )
+  if p.next == nil then
+    p.next = {n}
+    p.next_active = 1
+  else
+    table.insert(p.next, n)
+  end
+  if n.prev == nil then
+    n.prev = {p}
+    n.prev_active = 1
+  else
+    table.insert(n.prev, p)
+  end
+end
+
 function add_rail( rails, parent, r )
   local px,py
   if parent == nil then
@@ -154,16 +169,13 @@ function add_rail( rails, parent, r )
     px = parent.pos.x + parent.len * cos(parent.angle)
     py = parent.pos.y - parent.len * sin(parent.angle)
     r.pos = v2(px,py)
-    -- TODO: implement tracks switch
-    parent.next = r
-    r.prev = parent
+    link_rails(parent, r)
   end
   table.insert(rails, r)
 end
 
-function connect_rails( r1, r2 )
-  r1.next = r2
-  r2.prev = r1
+function loop_rails( r1, r2 )
+  link_rails(r1, r2)
   r1.angle = v2angle(r1.pos, r2.pos)
   r1.len = v2dist(r2.pos, r1.pos)
 end
@@ -265,6 +277,8 @@ RAILS = {}
 
 start_rail = deepcopy(rail)
 cr = start_rail
+switch1 = nil
+switch2 = nil
 
 add_rail(RAILS, nil, start_rail)
 
@@ -272,12 +286,46 @@ for i=1,10 do
   local nr = deepcopy(rail)
   add_rail(RAILS, cr, nr)
   cr = nr
+  if i == 5 then
+    local new_cr = cr
+    switch1 = cr
+    for j=1,6 do
+      nr = deepcopy(rail)
+      nr.da = 60 * PI / 180
+      add_rail(RAILS, new_cr, nr)
+      new_cr = nr
+    end
+    loop_rails(new_cr, cr)
+  end
 end
 
-connect_rails(cr, start_rail)
+loop_rails(cr, start_rail)
 
+dt = 0
+current = start_rail
+forward = true
 function TIC()
+  dt = dt + 1
+  if dt % 10 == 0 then
+    if forward then
+      current = current.next[current.next_active]
+    else
+      current = current.prev[current.prev_active]
+    end
+  end
   cls(14)
+
+  if btn(UP) then
+    switch1.next_active = 2
+    switch1.prev_active = 2
+  end
+  if btn(DOWN) then
+    switch1.next_active = 1
+    switch1.prev_active = 1
+  end
+  if btn(LEFT) then forward = false end
+  if btn(RIGHT) then forward = true end
+
   -- if btn(UP) then cam.y = cam.y - 0.1 end
   -- if btn(DOWN) then cam.y = cam.y + 0.1 end
   -- if btn(LEFT) then cam.x = cam.x - 0.1 end
@@ -287,6 +335,10 @@ function TIC()
   -- fig_3d(octa_3d)
   -- rot_3d(octa_3d, center, rot_angle)
   for i,v in ipairs(RAILS) do
-    draw_rail(v, i % 10)
+    if current == v then
+      draw_rail(v, 1)
+    else
+      draw_rail(v, 2)
+    end
   end
 end
