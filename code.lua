@@ -12,6 +12,12 @@ H3D=0.65
 
 sf = string.format
 
+KEY_W = 23
+KEY_A = 01
+KEY_S = 19
+KEY_D = 4
+KEY_Q = 17
+KEY_E = 5
 UP=0
 DOWN=1
 LEFT=2
@@ -59,17 +65,41 @@ end
 cam={
   x=0,
   y=0,
-  z=0
+  z=0,
+  rx=0,
+  ry=0,
+  rz=0
 }
 
-function point_3d( x,y,z )
-  local dz = z - cam.z
-  if dz <= 0.00001 then return nil,nil end
-  local x2d,y2d = (x-cam.x)/dz, (y-cam.y)/dz
+function point_3d_new( x,y,z )
+  local x1,y1,z1
+
+  local dx,dy,dz = x - cam.x, y - cam.y, z - cam.z
+  local cx,cy,cz = cos(cam.rx), cos(cam.ry), cos(cam.rz)
+  local sx,sy,sz = sin(cam.rx), sin(cam.ry), sin(cam.rz)
+
+  x1 = cy*(sz*dy + cz*dx) - sy*dz
+  y1 = sx*(cy*dz + sy*(sz*dy + cz*dx)) + cx*(cz*dy - sz*dx)
+  z1 = cx*(cy*dz + sy*(sz*dy + cz*dx)) - sx*(cz*dy - sz*dx)
+
+  if z1 <= 0.00001 then return nil,nil end
+
+  local x2d,y2d = x1/z1, y1/z1
   local xnorm, ynorm = (x2d + W3D/2) / W3D, (y2d + H3D/2) / H3D
   local xproj, yproj = xnorm * W, (-ynorm + 1) * H
   return xproj, yproj
 end
+
+-- function point_3d( x,y,z )
+--   local dz = z - cam.z
+--   if dz <= 0.00001 then return nil,nil end
+--   local x2d,y2d = (x-cam.x)/dz, (y-cam.y)/dz
+--   local xnorm, ynorm = (x2d + W3D/2) / W3D, (y2d + H3D/2) / H3D
+--   local xproj, yproj = xnorm * W, (-ynorm + 1) * H
+--   return xproj, yproj
+-- end
+
+point_3d = point_3d_new
 
 function line_3d( x1,y1,z1,x2,y2,z2,c )
   xn1,yn1 = point_3d(x1,y1,z1)
@@ -246,30 +276,30 @@ sq_3d = {
 
 octa_3d = {
   vert = {
-    v3(1,1,0),
-    v3(1,2,0),
-    v3(2,1,0),
-    v3(2,2,0),
-    v3(1,0,1),
-    v3(2,0,1),
-    v3(0,1,1),
-    v3(0,2,1),
-    v3(1,3,1),
-    v3(2,3,1),
-    v3(3,1,1),
-    v3(3,2,1),
-    v3(1,0,2),
-    v3(2,0,2),
-    v3(0,1,2),
-    v3(0,2,2),
-    v3(1,3,2),
-    v3(2,3,2),
-    v3(3,1,2),
-    v3(3,2,2),
-    v3(1,1,3),
-    v3(1,2,3),
-    v3(2,1,3),
-    v3(2,2,3)
+    v3(10,10,00),
+    v3(10,20,00),
+    v3(20,10,00),
+    v3(20,20,00),
+    v3(10,00,10),
+    v3(20,00,10),
+    v3(00,10,10),
+    v3(00,20,10),
+    v3(10,30,10),
+    v3(20,30,10),
+    v3(30,10,10),
+    v3(30,20,10),
+    v3(10,00,20),
+    v3(20,00,20),
+    v3(00,10,20),
+    v3(00,20,20),
+    v3(10,30,20),
+    v3(20,30,20),
+    v3(30,10,20),
+    v3(30,20,20),
+    v3(10,10,30),
+    v3(10,20,30),
+    v3(20,10,30),
+    v3(20,20,30)
   },
   edges = {
     {1,2,4,3,1},
@@ -301,7 +331,7 @@ rot_angle = {
 
 cam.x = 1.5
 cam.y = 1.5
-cam.z = -0.8
+cam.z = 1.5
 
 rail = {
   da = 30.0 * PI / 180,
@@ -348,7 +378,7 @@ loop_rails(r6, r2)
 link_rails(r5, r6, true, true, false)
 link_rails(r6, r1, true, false, true)
 link_rails(r1, r6, true, false, true)
-r1.next_active=2
+-- r1.next_active=2
 train.rail = r1
 
 win = false
@@ -368,12 +398,18 @@ function TIC()
 
   move_train(train)
 
-  -- if btn(UP) then cam.y = cam.y - 0.1 end
-  -- if btn(DOWN) then cam.y = cam.y + 0.1 end
-  -- if btn(LEFT) then cam.x = cam.x - 0.1 end
-  -- if btn(RIGHT) then cam.x = cam.x + 0.1 end
-  -- if btn(BTN_Z) then cam.z = cam.z - 0.05 end
-  -- if btn(BTN_X) then cam.z = cam.z + 0.05 end
+  -- if key(KEY_S) then cam.y = cam.y - 0.1 end
+  -- if key(KEY_W) then cam.y = cam.y + 0.1 end
+  -- if key(KEY_A) then cam.x = cam.x - 0.1 end
+  -- if key(KEY_D) then cam.x = cam.x + 0.1 end
+  -- if key(KEY_Q) then cam.z = cam.z - 0.1 end
+  -- if key(KEY_E) then cam.z = cam.z + 0.1 end
+  -- if btn(UP) then cam.ry = cam.ry - 0.01 end
+  -- if btn(DOWN) then cam.ry = cam.ry + 0.01 end
+  -- if btn(LEFT) then cam.rx = cam.rx - 0.01 end
+  -- if btn(RIGHT) then cam.rx = cam.rx + 0.01 end
+  -- if btn(BTN_Z) then cam.rz = cam.rz - 0.01 end
+  -- if btn(BTN_X) then cam.rz = cam.rz + 0.01 end
   -- fig_3d(octa_3d)
   -- rot_3d(octa_3d, center, rot_angle)
 end
