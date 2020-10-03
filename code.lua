@@ -113,7 +113,7 @@ cam={
   rz=0
 }
 
-function point_3d_new( x,y,z )
+function point_3d( x,y,z )
   local x1,y1,z1
 
   local dx,dy,dz = x - cam.x, y - cam.y, z - cam.z
@@ -131,17 +131,6 @@ function point_3d_new( x,y,z )
   local xproj, yproj = xnorm * W, (-ynorm + 1) * H
   return xproj, yproj
 end
-
--- function point_3d( x,y,z )
---   local dz = z - cam.z
---   if dz <= 0.00001 then return nil,nil end
---   local x2d,y2d = (x-cam.x)/dz, (y-cam.y)/dz
---   local xnorm, ynorm = (x2d + W3D/2) / W3D, (y2d + H3D/2) / H3D
---   local xproj, yproj = xnorm * W, (-ynorm + 1) * H
---   return xproj, yproj
--- end
-
-point_3d = point_3d_new
 
 function line_3d( x1,y1,z1,x2,y2,z2,c )
   xn1,yn1 = point_3d(x1,y1,z1)
@@ -195,6 +184,21 @@ function fig_3d( fig )
     for j=1,#v-1 do
       line_3dv(fig.vert[v[j]], fig.vert[v[j+1]], 1)
     end
+  end
+end
+
+function fig3d_add( f1,f2 )
+  local vertsize = #f1.vert
+  for i,v in ipairs(f2.vert) do
+    table.insert(f1.vert,v)
+  end
+
+  for i,v in ipairs(f2.edges) do
+    local ne = {}
+    for j,e in ipairs(v) do
+      table.insert(ne, e + vertsize)
+    end
+    table.insert(f1.edges, ne)
   end
 end
 
@@ -265,6 +269,9 @@ function calc_rails( r )
   return lstart,lend,rstart,rend,end_pos
 end
 
+function make_rails_3d( r, ls,le,rs,re )
+end
+
 function init_rail_gfx( r )
   local lstart,lend,rstart,rend,end_pos = calc_rails(r)
   if r.prev ~= nil then
@@ -296,6 +303,8 @@ function init_rail_gfx( r )
 
   table.insert(r.lines, {lstart,lend})
   table.insert(r.lines, {rstart,rend})
+
+  local rail_3d = make_rails_3d(r, lstart, lend, rstart, rend)
 end
 
 function draw_rail( r,c )
