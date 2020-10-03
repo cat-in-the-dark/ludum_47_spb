@@ -152,6 +152,14 @@ function v3add( v1,v2 )
   return {x=v1.x+v2.x,y=v1.y+v2.y,z=v1.z+v2.z}
 end
 
+function v3div( v3,n )
+  return {v3.x/n, v3.y/n, v3.z/n}
+end
+
+function v3divxy( v3,n )
+  return {v3.x/n, v3.y/n, v3.z}
+end
+
 function line_3dv( v1,v2,c )
   line_3d(v1.x,v1.y,v1.z,v2.x,v2.y,v2.z,c)
 end
@@ -279,27 +287,34 @@ function calc_rails( r )
   return lstart,lend,rstart,rend,end_pos
 end
 
+function add_scale( m,p1,p2 )
+  local dx,dy = p2.x-p1.x, p2.y-p1.y
+  for i=1,10 do
+    fig3d_addv(m, v3(p1.x+dx*(i-1)/10, p1.y+dy*(i-1)/10,p1.z),v3(p1.x+dx*i/10, p1.y+dy*i/10,p1.z))
+  end
+end
+
 function make_rails_3d( r, ls,le,rs,re )
   local model = deepcopy(obj_3d)
   local l1,l2,l3,l4,l5,l6,r1,r2,r3,r4,r5,r6
   l1 = v3(ls.x,ls.y,0)
   l2 = v3(le.x,le.y,0)
-  fig3d_addv(model, l1,l2)
+  add_scale(model, l1,l2)
   l3 = v3add(l1,v3(0,0,1))
   l4 = v3add(l2,v3(0,0,1))
-  fig3d_addv(model, l3,l4)
+  add_scale(model, l3,l4)
   l5 = v3add(l3,v3(-1,0,0))
   l6 = v3add(l4,v3(-1,0,0))
-  fig3d_addv(model, l5,l6)
+  add_scale(model, l5,l6)
   r1 = v3(rs.x,rs.y,0)
   r2 = v3(re.x,re.y,0)
-  fig3d_addv(model, r1,r2)
+  add_scale(model, r1,r2)
   r3 = v3add(r1,v3(0,0,1))
   r4 = v3add(r2,v3(0,0,1))
-  fig3d_addv(model, r3,r4)
+  add_scale(model, r3,r4)
   r5 = v3add(r3,v3(1,0,0))
   r6 = v3add(r4,v3(1,0,0))
-  fig3d_addv(model, r5,r6)
+  add_scale(model, r5,r6)
   fig3d_add(r.model, model)
 end
 
@@ -377,13 +392,31 @@ function draw_train( t )
   circv(v2add(r.pos, v2(t.progress * cos(r.angle), -t.progress * sin(r.angle))), 5,4)
 end
 
+da = 0
+dx = 0
+dy = 0
 function draw_train_3d( t )
   local r = t.rail
+  local dist = 6
   local cpos = v2add(r.pos, v2(t.progress * cos(r.angle), -t.progress * sin(r.angle)))
-  cam.x = cpos.x
-  cam.y = cpos.y
-  cam.rz = -r.angle + PI / 2
-  if t.rev then cam.rz = cam.rz - PI end
+  local target_x = cpos.x - dist * cos(r.angle)
+  local target_y = cpos.y + dist * sin(r.angle)
+  local target_rz = -r.angle + PI / 2
+  if t.rev then target_rz = target_rz - PI end
+  da = (target_rz - cam.rz)
+  dx = (target_x - cam.x)
+  dy = (target_y - cam.y)
+  -- cam.rz = target_rz
+  local rate = 30
+  if (math.abs(cam.rz - target_rz) >= 0.0001) then
+    cam.rz = cam.rz + da / rate
+  end
+  if (math.abs(cam.x - target_x) >= 0.0001) then
+    cam.x = cam.x + dx / rate
+  end
+  if (math.abs(cam.y - target_y) >= 0.0001) then
+    cam.y = cam.y + dy / rate
+  end
 end
 
 -- objects
@@ -465,8 +498,8 @@ rot_angle = {
 
 cam.x = 50
 cam.y = 100
-cam.z = 17
-cam.rx = 2
+cam.z = 5
+cam.rx = PI / 2
 cam.rz = PI / 2
 
 rail = {
@@ -482,6 +515,22 @@ rail = {
 
 RAILS = {}
 
+cr = deepcopy(rail)
+start = cr
+add_rail(RAILS, nil, cr)
+
+for i=1,11 do
+  local r = deepcopy(rail)
+  r.da = PI / 6
+  r.len=40.0
+  add_rail(RAILS,cr,r)
+  link_rails(cr, r, true, true, false)
+  cr = r
+end
+
+link_rails(cr,start,true,true,false)
+loop_rails(cr,start)
+
 train = {
   rail = nil,
   speed = 0.4,
@@ -491,34 +540,35 @@ train = {
 
 -- init
 
-r1 = deepcopy(rail)
-r1.da = 0
-add_rail(RAILS, nil, r1)
-r2 = deepcopy(rail)
-r2.da = 0
-add_rail(RAILS, r1, r2)
-link_rails(r1, r2, true, true, false)
-r3 = deepcopy(rail)
-r3.da = 60 * PI / 180
-add_rail(RAILS, r2, r3)
-link_rails(r2, r3, true, true, false)
--- r2.next_active=2
-r4 = deepcopy(rail)
-r4.da = 0
-add_rail(RAILS, r2, r4)
-link_rails(r2, r4, true, true, false)
-r5 = deepcopy(rail)
-r5.da = 60 * PI / 180
-add_rail(RAILS, r3, r5)
-link_rails(r3, r5, true, true, false)
-r6 = deepcopy(rail)
-add_rail(RAILS, r5, r6)
-loop_rails(r6, r2)
-link_rails(r5, r6, true, true, false)
-link_rails(r6, r1, true, false, true)
-link_rails(r1, r6, true, false, true)
-r1.next_active=1
-train.rail = r1
+-- r1 = deepcopy(rail)
+-- r1.da = 0
+-- add_rail(RAILS, nil, r1)
+-- r2 = deepcopy(rail)
+-- r2.da = 0
+-- add_rail(RAILS, r1, r2)
+-- link_rails(r1, r2, true, true, false)
+-- r3 = deepcopy(rail)
+-- r3.da = 60 * PI / 180
+-- add_rail(RAILS, r2, r3)
+-- link_rails(r2, r3, true, true, false)
+-- -- r2.next_active=2
+-- r4 = deepcopy(rail)
+-- r4.da = 0
+-- add_rail(RAILS, r2, r4)
+-- link_rails(r2, r4, true, true, false)
+-- r5 = deepcopy(rail)
+-- r5.da = 60 * PI / 180
+-- add_rail(RAILS, r3, r5)
+-- link_rails(r3, r5, true, true, false)
+-- r6 = deepcopy(rail)
+-- add_rail(RAILS, r5, r6)
+-- loop_rails(r6, r2)
+-- link_rails(r5, r6, true, true, false)
+-- link_rails(r6, r1, true, false, true)
+-- link_rails(r1, r6, true, false, true)
+-- r1.next_active=1
+-- train.rail = r1
+train.rail = start
 
 win = false
 function game_win()
@@ -542,10 +592,10 @@ function TIC()
 
   if win then return end
 
-  if key(KEY_R) then
+  -- if key(KEY_R) then
     draw_train_3d(train)
     move_train(train)
-  end
+  -- end
 
   if key(KEY_S) then cam.y = cam.y - 0.1 end
   if key(KEY_W) then cam.y = cam.y + 0.1 end
@@ -559,7 +609,8 @@ function TIC()
   if btn(RIGHT) then cam.rx = cam.rx + 0.01 end
   if btn(BTN_Z) then cam.rz = cam.rz - 0.01 end
   if btn(BTN_X) then cam.rz = cam.rz + 0.01 end
-  print(sf("%.2f %.2f %.2f %.2f %.2f %.2f %.2f", train.rail.angle,cam.x,cam.y,cam.z,cam.rx,cam.ry,cam.rz))
+  print(sf("%.2f: %.2f %.2f", train.rail.pos.x,train.rail.pos.y,train.rail.angle), 0, 10)
+  print(sf("%.2f %.2f %.2f: %.2f %.2f %.2f", cam.x,cam.y,cam.z,cam.rx,cam.ry,cam.rz), 0, 18)
   -- fig_3d(octa_3d)
   -- rot_3d(octa_3d, center, rot_angle)
 end
