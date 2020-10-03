@@ -28,6 +28,7 @@ BTN_X=5
 
 cos = math.cos
 sin = math.sin
+abs = math.abs
 PI = math.pi
 
 function deepcopy(orig)
@@ -68,7 +69,7 @@ function line_cross( x1,y1,x2,y2,x3,y3,x4,y4 )
   pyup = det(det(x1,y1,x2,y2), y1-y2, det(x3,y3,x4,y4), y3-y4)
   pydn = det(x1-x2, y1-y2, x3-x4, y3-y4)
 
-  if pxdn == 0 or pydn == 0 then
+  if abs(pxdn) <= 0.0001 or abs(pydn) <= 0.0001 then
     return nil,nil
   else
     return pxup/pxdn, pyup/pydn
@@ -114,7 +115,7 @@ cam={
   rz=0
 }
 
-function point_3d( x,y,z )
+function cam_proj( x,y,z )
   local x1,y1,z1
 
   local dx,dy,dz = x - cam.x, y - cam.y, z - cam.z
@@ -125,6 +126,10 @@ function point_3d( x,y,z )
   y1 = sx*(cy*dz + sy*(sz*dy + cz*dx)) + cx*(cz*dy - sz*dx)
   z1 = cx*(cy*dz + sy*(sz*dy + cz*dx)) - sx*(cz*dy - sz*dx)
 
+  return x1,y1,z1
+end
+
+function point_3d_proj( x1,y1,z1 )
   if z1 <= 0.00001 then return nil,nil end
 
   local x2d,y2d = x1/z1, y1/z1
@@ -133,11 +138,36 @@ function point_3d( x,y,z )
   return xproj, yproj
 end
 
+function point_3d( x,y,z )
+  local x1,y1,z1 = cam_proj(x,y,z)
+  return point_3d_proj(x1,y1,z1)
+end
+
+calls = 0
 function line_3d( x1,y1,z1,x2,y2,z2,c )
-  xn1,yn1 = point_3d(x1,y1,z1)
-  xn2,yn2 = point_3d(x2,y2,z2)
+  local xp1,yp1,zp1 = cam_proj(x1,y1,z1)
+  local xp2,yp2,zp2 = cam_proj(x2,y2,z2)
+
+  if zp1 <= 0.0001 and zp2 <= 0.0001 then return end
+  -- adjust line length
+  if zp1 <= 0.0001 then
+    local frac = abs(zp2)/abs(zp1-zp2)
+    zp1 = 0.1
+    xp1 = frac * (xp1 - xp2) + xp2
+    yp1 = frac * (yp1 - yp2) + yp2
+  elseif zp2 <= 0.0001 then
+    local frac = abs(zp1)/abs(zp1-zp2)
+    zp2 = 0.1
+    xp2 = frac * (xp2 - xp1) + xp1
+    yp2 = frac * (yp2 - yp1) + yp1
+  end
+
+  local xn1,yn1 = point_3d_proj(xp1,yp1,zp1)
+  local xn2,yn2 = point_3d_proj(xp2,yp2,zp2)
+  -- trace(sf("%.2f %.2f %.2f %.2f", xn1, xn2, yn1, yn2))
   if xn1 == nil or xn2 == nil then return end
   line(xn1,yn1,xn2,yn2,c)
+  calls = calls + 1
 end
 
 function v3( x,y,z )
@@ -188,7 +218,8 @@ function rect_3d( x,y,z,w,h )
   line_3d(x + w, y - h, z, x + w, y, z)
 end
 
-function fig_3d( fig )
+function fig_3d( fig,c )
+  if c == nil then c = 1 end
   for i,v in ipairs(fig.edges) do
     for j=1,#v-1 do
       line_3dv(fig.vert[v[j]], fig.vert[v[j+1]], 1)
@@ -224,8 +255,8 @@ function rot_2d( x0, y0, cx, cy, angle )
   local x1,y1,da,dist
   dist = v2dist(v2(cx,cy), v2(x0,y0))
   da = math.atan(y0-cy, x0-cx)
-  x1 = dist * math.cos(angle + da) + cx
-  y1 = dist * math.sin(angle + da) + cy
+  x1 = dist * cos(angle + da) + cx
+  y1 = dist * sin(angle + da) + cy
   return x1,y1
 end
 
@@ -294,28 +325,28 @@ function add_scale( m,p1,p2 )
   end
 end
 
-function make_rails_3d( r, ls,le,rs,re )
+function make_rails_3d( ls,le,rs,re )
   local model = deepcopy(obj_3d)
   local l1,l2,l3,l4,l5,l6,r1,r2,r3,r4,r5,r6
   l1 = v3(ls.x,ls.y,0)
   l2 = v3(le.x,le.y,0)
-  add_scale(model, l1,l2)
+  fig3d_addv(model, l1,l2)
   l3 = v3add(l1,v3(0,0,1))
   l4 = v3add(l2,v3(0,0,1))
-  add_scale(model, l3,l4)
+  fig3d_addv(model, l3,l4)
   l5 = v3add(l3,v3(-1,0,0))
   l6 = v3add(l4,v3(-1,0,0))
-  add_scale(model, l5,l6)
+  fig3d_addv(model, l5,l6)
   r1 = v3(rs.x,rs.y,0)
   r2 = v3(re.x,re.y,0)
-  add_scale(model, r1,r2)
+  fig3d_addv(model, r1,r2)
   r3 = v3add(r1,v3(0,0,1))
   r4 = v3add(r2,v3(0,0,1))
-  add_scale(model, r3,r4)
+  fig3d_addv(model, r3,r4)
   r5 = v3add(r3,v3(1,0,0))
   r6 = v3add(r4,v3(1,0,0))
-  add_scale(model, r5,r6)
-  fig3d_add(r.model, model)
+  fig3d_addv(model, r5,r6)
+  return model
 end
 
 function init_rail_gfx( r )
@@ -350,7 +381,8 @@ function init_rail_gfx( r )
   table.insert(r.lines, {lstart,lend})
   table.insert(r.lines, {rstart,rend})
 
-  local rail_3d = make_rails_3d(r, lstart, lend, rstart, rend)
+  local rail_3d = make_rails_3d(lstart, lend, rstart, rend)
+  r.model = rail_3d
 end
 
 function draw_rail( r,c )
@@ -518,6 +550,7 @@ RAILS = {}
 cr = deepcopy(rail)
 start = cr
 add_rail(RAILS, nil, cr)
+target = nil
 
 for i=1,11 do
   local r = deepcopy(rail)
@@ -525,6 +558,9 @@ for i=1,11 do
   r.len=40.0
   add_rail(RAILS,cr,r)
   link_rails(cr, r, true, true, false)
+  if i == 1 then
+    target = r
+  end
   cr = r
 end
 
@@ -540,34 +576,34 @@ train = {
 
 -- init
 
--- r1 = deepcopy(rail)
--- r1.da = 0
--- add_rail(RAILS, nil, r1)
--- r2 = deepcopy(rail)
--- r2.da = 0
--- add_rail(RAILS, r1, r2)
--- link_rails(r1, r2, true, true, false)
--- r3 = deepcopy(rail)
--- r3.da = 60 * PI / 180
--- add_rail(RAILS, r2, r3)
--- link_rails(r2, r3, true, true, false)
--- -- r2.next_active=2
--- r4 = deepcopy(rail)
--- r4.da = 0
--- add_rail(RAILS, r2, r4)
--- link_rails(r2, r4, true, true, false)
--- r5 = deepcopy(rail)
--- r5.da = 60 * PI / 180
--- add_rail(RAILS, r3, r5)
--- link_rails(r3, r5, true, true, false)
--- r6 = deepcopy(rail)
--- add_rail(RAILS, r5, r6)
--- loop_rails(r6, r2)
--- link_rails(r5, r6, true, true, false)
--- link_rails(r6, r1, true, false, true)
--- link_rails(r1, r6, true, false, true)
--- r1.next_active=1
--- train.rail = r1
+r1 = deepcopy(rail)
+r1.da = 0
+add_rail(RAILS, target, r1)
+link_rails(target, r1, true, true, false, true)
+r2 = deepcopy(rail)
+r2.da = 0
+add_rail(RAILS, r1, r2)
+link_rails(r1, r2, true, true, false)
+r3 = deepcopy(rail)
+r3.da = 60 * PI / 180
+add_rail(RAILS, r2, r3)
+link_rails(r2, r3, true, true, false)
+-- r2.next_active=2
+r4 = deepcopy(rail)
+r4.da = 0
+add_rail(RAILS, r2, r4)
+link_rails(r2, r4, true, true, false)
+r5 = deepcopy(rail)
+r5.da = 60 * PI / 180
+add_rail(RAILS, r3, r5)
+link_rails(r3, r5, true, true, false)
+r6 = deepcopy(rail)
+add_rail(RAILS, r5, r6)
+loop_rails(r6, r2)
+link_rails(r5, r6, true, true, false)
+link_rails(r6, r1, true, false, true)
+link_rails(r1, r6, true, false, true)
+r1.next_active=1
 train.rail = start
 
 win = false
@@ -579,23 +615,24 @@ for i,v in ipairs(RAILS) do
   init_rail_gfx(v)
 end
 
-draw_train_3d(train)
-
 function TIC()
+  calls = 0
   cls(14)
 
   draw_train(train)
   for i,v in ipairs(RAILS) do
     draw_rail_3d(v,i)
-    draw_rail(v, i)
+    draw_rail(v, i % 8)
   end
 
-  if win then return end
+  -- if win then return end
 
-  -- if key(KEY_R) then
+  -- -- if key(KEY_R) then
     draw_train_3d(train)
     move_train(train)
-  -- end
+  -- -- end
+
+  -- trace(calls)
 
   if key(KEY_S) then cam.y = cam.y - 0.1 end
   if key(KEY_W) then cam.y = cam.y + 0.1 end
