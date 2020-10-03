@@ -243,37 +243,33 @@ function add_rail( rails, parent, r )
     r.angle = parent.angle + r.da
     r.pos = v2add(parent.pos, v2(parent.len * cos(parent.angle), -1 * parent.len * sin(parent.angle)))
   end
-  r.end_pos = v2add(r.pos, v2(r.len * cos(r.angle), -1 * r.len * sin(r.angle)))
   table.insert(rails, r)
 end
 
 function loop_rails( r1, r2, reverse )
   r1.angle = v2angle(r1.pos, r2.pos)
   r1.len = v2dist(r2.pos, r1.pos)
-  r1.end_pos = v2add(r1.pos, v2(r1.len * cos(r1.angle), -1 * r1.len * sin(r1.angle)))
 end
 
 function calc_rails( r )
+  local end_pos = v2add(r.pos, v2(r.len * cos(r.angle), -1 * r.len * sin(r.angle)))
   local rw = 4  -- rail width
   local lnorm,rnorm = r.angle + PI / 2, r.angle - PI / 2
   local lstart,lend,rstart,rend,dl,dr
   dl = v2(rw * cos(lnorm), -rw * sin(lnorm))
   dr = v2(rw * cos(rnorm), -rw * sin(rnorm))
   lstart = v2add(r.pos, dl)
-  lend = v2add(r.end_pos, dl)
+  lend = v2add(end_pos, dl)
   rstart = v2add(r.pos, dr)
-  rend = v2add(r.end_pos, dr)
-  return lstart,lend,rstart,rend
+  rend = v2add(end_pos, dr)
+  return lstart,lend,rstart,rend,end_pos
 end
 
-function draw_rail( r,c )
-  local x1,y1
-  if r.angle == nil then r.angle = r.da end
-  local lstart,lend,rstart,rend = calc_rails(r)
-  -- connecting rails
+function init_rail_gfx( r )
+  local lstart,lend,rstart,rend,end_pos = calc_rails(r)
   if r.prev ~= nil then
     local p = r.prev[1].val
-    local plstart,plend,prstart,prend = calc_rails(p)
+    local plstart,plend,prstart,prend,pend_pos = calc_rails(p)
     local cl,cr
     cl = line_crossv(lstart,lend,plstart,plend)
     cr = line_crossv(rstart,rend,prstart,prend)
@@ -282,7 +278,7 @@ function draw_rail( r,c )
   end
   if r.next ~= nil then
     local n = r.next[1].val
-    local nlstart,nlend,nrstart,nrend = calc_rails(n)
+    local nlstart,nlend,nrstart,nrend,nend_pos = calc_rails(n)
     local cl,cr
     cl = line_crossv(lstart,lend,nlstart,nlend)
     cr = line_crossv(rstart,rend,nrstart,nrend)
@@ -290,15 +286,24 @@ function draw_rail( r,c )
     if cr ~= nil then rend = cr end
   end
 
-  linev(lstart,lend,c)
-  linev(rstart,rend,c)
-
   -- draw switch
   if r.next ~= nil and #r.next > 1 then
-    circv(r.end_pos, 3, 3)
+    table.insert(r.circles, end_pos)
   end
   if r.prev ~= nil and #r.prev > 1 then
-    circv(r.pos, 3, 3)
+    table.insert(r.circles, r.pos)
+  end
+
+  table.insert(r.lines, {lstart,lend})
+  table.insert(r.lines, {rstart,rend})
+end
+
+function draw_rail( r,c )
+  for i,v in ipairs(r.lines) do
+    linev(v[1], v[2], c)
+  end
+  for i,v in ipairs(r.circles) do
+    circv(v, 3, 3)
   end
 end
 
@@ -325,10 +330,7 @@ end
 
 function draw_train( t )
   local r = t.rail
-  local x,y = r.pos.x, r.pos.y
-  x = x + t.progress * cos(r.angle)
-  y = y - t.progress * sin(r.angle)
-  circ(x,y,5,4)
+  circv(v2add(r.pos, v2(t.progress * cos(r.angle), -t.progress * sin(r.angle))), 5,4)
 end
 
 -- objects
@@ -411,9 +413,11 @@ rail = {
   da = 30.0 * PI / 180,
   len = 40.0,
   pos = v2(50,100),
-  end_pos = v2(0,0),
   next = nil,
   prev = nil,
+  model={},
+  lines={},
+  circles={}
 }
 
 RAILS = {}
@@ -459,6 +463,10 @@ train.rail = r1
 win = false
 function game_win()
   win = true
+end
+
+for i,v in ipairs(RAILS) do
+  init_rail_gfx(v)
 end
 
 function TIC()
