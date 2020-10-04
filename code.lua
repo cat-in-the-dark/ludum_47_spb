@@ -191,11 +191,25 @@ function line_3d( x1,y1,z1,x2,y2,z2,c )
     yp2 = frac * (yp2 - yp1) + yp1
   end
 
+  local c1,c2,c3,c4 = 0,8,15,14
+
+  local avg_z = math.min(zp1,zp2)
+  local color = c1
+  if avg_z >= 10 and avg_z < 20 then
+    color = c2
+  elseif avg_z >= 20 and avg_z < 40 then
+    color = c3
+  elseif avg_z >= 40 and avg_z < 100 then
+    color = c4
+  elseif avg_z >= 100 then
+    return
+  end
+
   local xn1,yn1 = point_3d_proj(xp1,yp1,zp1)
   local xn2,yn2 = point_3d_proj(xp2,yp2,zp2)
   -- trace(sf("%.2f %.2f %.2f %.2f", xn1, xn2, yn1, yn2))
   if xn1 == nil or xn2 == nil then return end
-  line(xn1,yn1,xn2,yn2,c)
+  line(xn1,yn1,xn2,yn2,color)
   calls = calls + 1
 end
 
@@ -243,13 +257,6 @@ function line_3dvv( vecs,c )
   end
 end
 
-function rect_3d( x,y,z,w,h )
-  line_3d(x, y, z, x + w, y, z)
-  line_3d(x, y, z, x, y - h, z)
-  line_3d(x + w, y - h, z, x, y - h, z)
-  line_3d(x + w, y - h, z, x + w, y, z)
-end
-
 function fig_3d( fig,c )
   if c == nil then c = 1 end
   for i,v in ipairs(fig.edges) do
@@ -290,6 +297,13 @@ function rot_2d( x0, y0, cx, cy, angle )
   x1 = dist * cos(angle + da) + cx
   y1 = dist * sin(angle + da) + cy
   return x1,y1
+end
+
+function move_fig( fig,dv )
+  for i,v in ipairs(fig.vert) do
+    local res = v3add(v,dv)
+    v.x,v.y,v.z = res.x,res.y,res.z
+  end
 end
 
 function rot_3d( fig, cv, rot )
@@ -507,11 +521,11 @@ function init_rails( rails )
 
   local r25 = make_turn(rails,r3,PI/2,true)
 
-  local r26 = make_straight(rails,r25,R_LEN,true)
-  local finish = make_straight(rails,r26,R_LEN,true)
+  local r26 = make_straight(rails,r25,10,true)
+  local finish = make_straight(rails,r26,5,true)
   finish.finish = true
 
-  return start
+  return cr,finish
 end
 
 function init_rail_gfx( r )
@@ -563,22 +577,44 @@ function init_rail_gfx( r )
     table.insert(BTNS, btn)
   end
 
-  table.insert(r.lines, {lstart,lend})
-  table.insert(r.lines, {rstart,rend})
+  -- minimap-optimized line drawing
+  local segs = math.floor(v2dist(r.pos,end_pos) / 10) + 1
+  for i=1,segs do
+    local blx,bly,elx,ely,brx,bry,erx,ery
+    -- blx = (lend.x - lstart.x) * (i-1)/segs + lstart.x
+    -- bly = (lend.y - lstart.y) * (i-1)/segs + lstart.y
+    -- elx = (lend.x - lstart.x) * i/segs + lstart.x
+    -- ely = (lend.y - lstart.y) * i/segs + lstart.y
+    -- brx = (rend.x - rstart.x) * (i-1)/segs + rstart.x
+    -- bry = (rend.y - rstart.y) * (i-1)/segs + rstart.y
+    -- erx = (rend.x - rstart.x) * i/segs + rstart.x
+    -- ery = (rend.y - rstart.y) * i/segs + rstart.y
+    -- table.insert(r.lines, {v2(blx,bly),v2(elx,ely)})
+    -- table.insert(r.lines, {v2(brx,bry),v2(erx,ery)})
+    blx = (end_pos.x - r.pos.x) * (i-1)/segs + r.pos.x
+    bly = (end_pos.y - r.pos.y) * (i-1)/segs + r.pos.y
+    elx = (end_pos.x - r.pos.x) * i/segs + r.pos.x
+    ely = (end_pos.y - r.pos.y) * i/segs + r.pos.y
+    table.insert(r.lines, {v2(blx,bly),v2(elx,ely)})
+  end
 
   local rail_3d = make_rails_3d(lstart, lend, rstart, rend, r.angle)
   r.model = rail_3d
 end
 
 function draw_rail( r,delta,c )
+  local thr = 75
   for i,v in ipairs(r.lines) do
     local v1,v2 = v2add(v[1],delta),v2add(v[2],delta)
-
-    linev(v1,v2, c)
+    if v2dist(v1,MINIMAP_POS) < thr or v2dist(v2,MINIMAP_POS) < thr then
+      linev(v2mul(v1,MINIMAP_SCALE),v2mul(v2,MINIMAP_SCALE), c)
+    end
   end
   for i,v in ipairs(r.circles) do
     local v1 = v2add(v,delta)
-    circv(v1, 3, 3)
+    if v2dist(v1,MINIMAP_POS) < thr then
+      circv(v2mul(v1,MINIMAP_SCALE), 2, 3)
+    end
   end
 end
 
@@ -646,7 +682,7 @@ function draw_rail_3d( r,t,c )
 end
 
 function move_train( t )
-  local sp,slow = 0.4,0.2
+  local sp,slow,sslow = 0.4,0.2,0.1
   if t.rail.finish then
     game_win()
   end
@@ -657,7 +693,9 @@ function move_train( t )
     if not t.rev then
       _,_,_,_,spos = calc_rails(r,true)
     end
-    if v2dist(spos,tpos) < 20 then
+    if v2dist(spos,tpos) < 5 then
+      t.speed = sslow
+    elseif v2dist(spos,tpos) < 20 then
       t.speed = slow
     else
       t.speed = sp
@@ -689,7 +727,7 @@ function draw_train( t )
   local r = t.rail
   local cpos = v2add(r.pos, v2(t.progress * cos(r.angle), -t.progress * sin(r.angle)))
   local delta = v2add(MINIMAP_POS, v2mul(cpos,-1))
-  circv(MINIMAP_POS, 5,4)
+  circv(v2mul(MINIMAP_POS,MINIMAP_SCALE),3,4)
   return delta
 end
 
@@ -768,30 +806,30 @@ sq_3d = {
 
 octa_3d = {
   vert = {
-    v3(10,10,00),
-    v3(10,20,00),
-    v3(20,10,00),
-    v3(20,20,00),
-    v3(10,00,10),
-    v3(20,00,10),
-    v3(00,10,10),
-    v3(00,20,10),
-    v3(10,30,10),
-    v3(20,30,10),
-    v3(30,10,10),
-    v3(30,20,10),
-    v3(10,00,20),
-    v3(20,00,20),
-    v3(00,10,20),
-    v3(00,20,20),
-    v3(10,30,20),
-    v3(20,30,20),
-    v3(30,10,20),
-    v3(30,20,20),
-    v3(10,10,30),
-    v3(10,20,30),
-    v3(20,10,30),
-    v3(20,20,30)
+    v3(1*3,1*3,0*3),
+    v3(1*3,2*3,0*3),
+    v3(2*3,1*3,0*3),
+    v3(2*3,2*3,0*3),
+    v3(1*3,0*3,1*3),
+    v3(2*3,0*3,1*3),
+    v3(0*3,1*3,1*3),
+    v3(0*3,2*3,1*3),
+    v3(1*3,3*3,1*3),
+    v3(2*3,3*3,1*3),
+    v3(3*3,1*3,1*3),
+    v3(3*3,2*3,1*3),
+    v3(1*3,0*3,2*3),
+    v3(2*3,0*3,2*3),
+    v3(0*3,1*3,2*3),
+    v3(0*3,2*3,2*3),
+    v3(1*3,3*3,2*3),
+    v3(2*3,3*3,2*3),
+    v3(3*3,1*3,2*3),
+    v3(3*3,2*3,2*3),
+    v3(1*3,1*3,3*3),
+    v3(1*3,2*3,3*3),
+    v3(2*3,1*3,3*3),
+    v3(2*3,2*3,3*3)
   },
   edges = {
     {1,2,4,3,1},
@@ -810,9 +848,9 @@ octa_3d = {
 }
 
 center = {
-  x = 1.5,
-  y = 1.5,
-  z = 1.5
+  x = 1.5 * 3,
+  y = 1.5 * 3,
+  z = 1.5 * 3
 }
 
 rot_angle = {
@@ -821,9 +859,6 @@ rot_angle = {
   k = 0.01
 }
 
-cam.x = 50
-cam.y = 100
-cam.z = 5
 cam.rx = 1.8
 cam.rz = PI / 2
 
@@ -851,7 +886,12 @@ RAILS = {}
 
 BTNS = {}
 
-MINIMAP_POS=v2(50,50)
+OBJS_3D = {
+  octa_3d
+}
+
+MINIMAP_POS=v2(75,75)
+MINIMAP_SCALE=0.3
 
 train = {
   rail = nil,
@@ -862,9 +902,16 @@ train = {
 
 -- init
 
-start = init_rails(RAILS)
+start,finish = init_rails(RAILS)
 train.rail = start
 -- train.rev=true
+move_fig(octa_3d, v223(finish.pos,1.5))
+center = v3add(center, v223(finish.pos,1.5))
+
+cam.x = start.pos.x
+cam.y = start.pos.y
+cam.z = 5
+cam.rz = (-start.angle + PI / 2)
 
 win = false
 function game_win()
@@ -877,11 +924,19 @@ end
 
 function TIC()
   calls = 0
-  cls(14)
+  cls(11)
+
+  rect(0,46,W,H-46,13)
+  rot_3d(octa_3d, center, rot_angle)
 
   if win then
     local tw = print("WIN",W,H,1,true,4)
     print ("WIN", (W - tw) / 2, H / 2,8,true,4)
+    fig_3d(octa_3d)
+    draw_train_3d(train)
+    for i,v in ipairs(RAILS) do
+      draw_rail_3d(v,train,i)
+    end
     return
   end
 
@@ -890,16 +945,20 @@ function TIC()
 
   for i,v in ipairs(RAILS) do
     draw_rail_3d(v,train,i)
-    draw_rail(v, delta, i % 8)
+    draw_rail(v, delta, 15)
     update_switch_buttons(train,v)
+  end
+
+  for i,v in ipairs(OBJS_3D) do
+    fig_3d(v)
   end
 
   draw_buttons(BTNS)
   update_buttons(BTNS)
 
-  if key(KEY_R) then
+  -- if key(KEY_R) then
     move_train(train)
-  end
+  -- end
 
   -- trace(calls)
 
@@ -915,8 +974,6 @@ function TIC()
   if btn(RIGHT) then cam.rx = cam.rx + 0.01 end
   if btn(BTN_Z) then cam.rz = cam.rz - 0.01 end
   if btn(BTN_X) then cam.rz = cam.rz + 0.01 end
-  print(sf("%.2f: %.2f %.2f", train.rail.pos.x,train.rail.pos.y,train.rail.angle), 0, 10)
-  print(sf("%.2f %.2f %.2f: %.2f %.2f %.2f", cam.x,cam.y,cam.z,cam.rx,cam.ry,cam.rz), 0, 18)
-  -- fig_3d(octa_3d)
-  -- rot_3d(octa_3d, center, rot_angle)
+  -- print(sf("%.2f: %.2f %.2f", train.rail.pos.x,train.rail.pos.y,train.rail.angle), 0, 10)
+  -- print(sf("%.2f %.2f %.2f: %.2f %.2f %.2f", cam.x,cam.y,cam.z,cam.rx,cam.ry,cam.rz), 0, 18)
 end
