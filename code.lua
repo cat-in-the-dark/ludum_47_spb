@@ -488,6 +488,7 @@ function init_rails( rails )
   local r12 = make_turn(rails,r11,-PI/2)
 
   local r13 = make_turn(rails,r9,PI/2,true)
+  r9.prev_active=2
 
   local r14 = make_straight(rails,r13,R_LEN,true)
 
@@ -496,6 +497,7 @@ function init_rails( rails )
   local r16 = make_straight(rails,r12,R_LEN)
   loop_rails(r16,r15)
   link_rails(r16,r15,true,true,false)
+  r16.prev_active=2
 
   local r17 = make_turn(rails,r16,PI/2)
   local r18 = make_turn(rails,r16,-PI/2,true)
@@ -513,11 +515,13 @@ function init_rails( rails )
   loop_rails(r23,r19,true)
   link_rails(r19,r23,true,false,true)
   link_rails(r23,r19,true,false,true)
+  -- r19.next_active=2
 
   local r24 = make_straight(rails,r20,R_LEN,true)
   link_rails(r24,r14,false,true,true)
   link_rails(r14,r24,false,true,true)
   connect_rails(r20,r14,r24,false,false)
+  r20.prev_active=2
 
   local r25 = make_turn(rails,r3,PI/2,true)
 
@@ -695,7 +699,7 @@ function move_train( t )
     end
     if v2dist(spos,tpos) < 5 then
       t.speed = sslow
-    elseif v2dist(spos,tpos) < 20 then
+    elseif v2dist(spos,tpos) < 15 then
       t.speed = slow
     else
       t.speed = sp
