@@ -1031,18 +1031,18 @@ function TIC()
 
   -- trace(calls)
 
-  if key(KEY_S) then cam.y = cam.y - 0.1 end
-  if key(KEY_W) then cam.y = cam.y + 0.1 end
-  if key(KEY_A) then cam.x = cam.x - 0.1 end
-  if key(KEY_D) then cam.x = cam.x + 0.1 end
-  if key(KEY_Q) then cam.z = cam.z - 0.1 end
-  if key(KEY_E) then cam.z = cam.z + 0.1 end
-  if btn(UP) then cam.ry = cam.ry - 0.01 end
-  if btn(DOWN) then cam.ry = cam.ry + 0.01 end
-  if btn(LEFT) then cam.rx = cam.rx - 0.01 end
-  if btn(RIGHT) then cam.rx = cam.rx + 0.01 end
-  if btn(BTN_Z) then cam.rz = cam.rz - 0.01 end
-  if btn(BTN_X) then cam.rz = cam.rz + 0.01 end
+  -- if key(KEY_S) then cam.y = cam.y - 0.1 end
+  -- if key(KEY_W) then cam.y = cam.y + 0.1 end
+  -- if key(KEY_A) then cam.x = cam.x - 0.1 end
+  -- if key(KEY_D) then cam.x = cam.x + 0.1 end
+  -- if key(KEY_Q) then cam.z = cam.z - 0.1 end
+  -- if key(KEY_E) then cam.z = cam.z + 0.1 end
+  -- if btn(UP) then cam.ry = cam.ry - 0.01 end
+  -- if btn(DOWN) then cam.ry = cam.ry + 0.01 end
+  -- if btn(LEFT) then cam.rx = cam.rx - 0.01 end
+  -- if btn(RIGHT) then cam.rx = cam.rx + 0.01 end
+  -- if btn(BTN_Z) then cam.rz = cam.rz - 0.01 end
+  -- if btn(BTN_X) then cam.rz = cam.rz + 0.01 end
   -- print(sf("%.2f: %.2f %.2f", train.rail.pos.x,train.rail.pos.y,train.rail.angle), 0, 10)
   -- print(sf("%.2f %.2f %.2f: %.2f %.2f %.2f", cam.x,cam.y,cam.z,cam.rx,cam.ry,cam.rz), 0, 18)
 end
