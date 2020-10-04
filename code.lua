@@ -334,16 +334,37 @@ function add_rail( rails, parent, r, reverse )
   table.insert(rails, r)
 end
 
-function loop_rails( r1, r2, reverse )
-  r1.angle = v2angle(r1.pos, r2.pos)
-  r1.len = v2dist(r2.pos, r1.pos)
+function connect_rails( r1,r2,rail,rev1,rev2 )
+  local pos2,pos1 = r1.pos,r2.pos
+  if rev1 then
+    local _,_,_,_,end_pos = calc_rails(r1)
+    pos1 = end_pos
+  end
+  if rev2 then
+    local _,_,_,_,end_pos = calc_rails(r2)
+    pos2 = end_pos
+  end
+  rail.pos = pos1
+  rail.angle = v2angle(pos1,pos2)
+  rail.len = v2dist(pos1,pos2)
+end
+
+function loop_rails( r1,r2,reverse )
+  if reverse then
+    local _,_,_,_,end_pos = calc_rails(r2)
+    r1.angle = v2angle(r1.pos, end_pos)
+    r1.len = v2dist(r1.pos, end_pos)
+  else
+    r1.angle = v2angle(r1.pos, r2.pos)
+    r1.len = v2dist(r2.pos, r1.pos)
+  end
 end
 
 function make_turn( rails,p,angle,reverse )
   local ca,da,len = 0,PI/12,5.0
   if angle < 0 then da = -da end
   local cr = p
-  while abs(angle_dist(ca,angle)) >= 0.01 do
+  while abs(angle_dist(ca,angle)) >= PI/12 do
     ca = ca + da
     local r = deepcopy(rail)
     r.len = len
@@ -359,8 +380,23 @@ function make_turn( rails,p,angle,reverse )
   return cr
 end
 
-function calc_rails( r )
+function make_straight( rails,p,len,reverse )
+  local r = deepcopy(rail)
+  r.len = len
+  r.da = 0
+  add_rail(rails,p,r,reverse)
+  if reverse then
+    link_rails(r,p,true,true,false)
+  else
+    link_rails(p,r,true,true,false)
+  end
+  return r
+end
+
+function calc_rails( r,just_end_pos )
   local end_pos = v2add(r.pos, v2(r.len * cos(r.angle), -1 * r.len * sin(r.angle)))
+  if just_end_pos then return nil,nil,nil,nil,end_pos end
+
   local rw = 2  -- rail width
   local lnorm,rnorm = r.angle + PI / 2, r.angle - PI / 2
   local lstart,lend,rstart,rend,dl,dr
@@ -405,12 +441,88 @@ function make_rails_3d( ls,le,rs,re,a )
   return model
 end
 
+function init_rails( rails )
+  local R_LEN=50
+
+  local cr = deepcopy(rail)
+  cr.len = 5.0
+  local start = cr
+  add_rail(rails, nil, cr)
+
+  local r1 = make_turn(rails,start,PI,false)
+
+  local r2 = make_straight(rails,r1,R_LEN)
+  local r3 = make_straight(rails,r2,R_LEN)
+
+  local r4 = make_turn(rails,r3,PI,false)
+
+  local r5 = make_straight(rails,r4,R_LEN)
+  local r6 = make_straight(rails,r5,R_LEN)
+
+  link_rails(r6,start,true,true,false)
+  loop_rails(r6,start)
+
+  local r7 = make_turn(rails,r5,-PI/2)
+
+  local r8 = make_straight(rails,r7,R_LEN)
+  local r9 = make_straight(rails,r8,R_LEN)
+
+  local r10 = make_turn(rails,r9,-PI/2)
+
+  local r11 = make_straight(rails,r10,R_LEN)
+  
+  local r12 = make_turn(rails,r11,-PI/2)
+
+  local r13 = make_turn(rails,r9,PI/2,true)
+
+  local r14 = make_straight(rails,r13,R_LEN,true)
+
+  local r15 = make_turn(rails,r14,PI/2,true)
+
+  local r16 = make_straight(rails,r12,R_LEN)
+  loop_rails(r16,r15)
+  link_rails(r16,r15,true,true,false)
+
+  local r17 = make_turn(rails,r16,PI/2)
+  local r18 = make_turn(rails,r16,-PI/2,true)
+
+  local r19 = make_straight(rails,r18,R_LEN,true)
+  local r20 = make_straight(rails,r17,R_LEN)
+
+  local r21 = make_turn(rails,r19,-PI/2,true)
+  local r22 = make_turn(rails,r20,PI/2)
+
+  loop_rails(r22,r21)
+  link_rails(r22,r21,true,true,false)
+
+  local r23 = make_straight(rails,r11,R_LEN,false)
+  loop_rails(r23,r19,true)
+  link_rails(r19,r23,true,false,true)
+  link_rails(r23,r19,true,false,true)
+
+  local r24 = make_straight(rails,r20,R_LEN,true)
+  link_rails(r24,r14,false,true,true)
+  link_rails(r14,r24,false,true,true)
+  connect_rails(r20,r14,r24,false,false)
+
+  local r25 = make_turn(rails,r3,PI/2,true)
+
+  local r26 = make_straight(rails,r25,R_LEN,true)
+  local finish = make_straight(rails,r26,R_LEN,true)
+  finish.finish = true
+
+  return start
+end
+
 function init_rail_gfx( r )
   local lstart,lend,rstart,rend,end_pos = calc_rails(r)
   if r.prev ~= nil then
     local p = r.prev[1].val
     local plstart,plend,prstart,prend,pend_pos = calc_rails(p)
     local cl,cr
+    if r.prev[1].rev then
+      plstart,plend,prstart,prend = prstart,prend,plstart,plend
+    end
     cl = line_crossv(lstart,lend,plstart,plend)
     cr = line_crossv(rstart,rend,prstart,prend)
     if cl ~= nil then lstart = cl end
@@ -420,6 +532,9 @@ function init_rail_gfx( r )
     local n = r.next[1].val
     local nlstart,nlend,nrstart,nrend,nend_pos = calc_rails(n)
     local cl,cr
+    if r.next[1].rev then
+      nlstart,nlend,nrstart,nrend = nrstart,nrend,nlstart,nlend
+    end
     cl = line_crossv(lstart,lend,nlstart,nlend)
     cr = line_crossv(rstart,rend,nrstart,nrend)
     if cl ~= nil then lend = cl end
@@ -531,6 +646,25 @@ function draw_rail_3d( r,t,c )
 end
 
 function move_train( t )
+  local sp,slow = 0.4,0.2
+  if t.rail.finish then
+    game_win()
+  end
+  if (t.rev and t.rail.prev ~= nil and #t.rail.prev > 1) or (not t.rev and t.rail.next ~= nil and #t.rail.next > 1) then
+    local r = t.rail
+    local tpos = v2add(r.pos, v2(t.progress * cos(r.angle), -t.progress * sin(r.angle)))
+    local spos = r.pos
+    if not t.rev then
+      _,_,_,_,spos = calc_rails(r,true)
+    end
+    if v2dist(spos,tpos) < 20 then
+      t.speed = slow
+    else
+      t.speed = sp
+    end
+  else
+    t.speed = sp
+  end
   if t.rev then
     t.progress = t.progress - t.speed
     if t.progress <= 0 then
@@ -554,8 +688,8 @@ end
 function draw_train( t )
   local r = t.rail
   local cpos = v2add(r.pos, v2(t.progress * cos(r.angle), -t.progress * sin(r.angle)))
-  local delta = v2add(TRAIN_SCR_POS, v2mul(cpos,-1))
-  circv(TRAIN_SCR_POS, 5,4)
+  local delta = v2add(MINIMAP_POS, v2mul(cpos,-1))
+  circv(MINIMAP_POS, 5,4)
   return delta
 end
 
@@ -689,8 +823,8 @@ rot_angle = {
 
 cam.x = 50
 cam.y = 100
-cam.z = 2.5
-cam.rx = PI / 2
+cam.z = 5
+cam.rx = 1.8
 cam.rz = PI / 2
 
 rail = {
@@ -717,45 +851,7 @@ RAILS = {}
 
 BTNS = {}
 
-TRAIN_SCR_POS=v2(50,50)
-
-cr = deepcopy(rail)
-cr.len = 5.0
-start = cr
-add_rail(RAILS, nil, cr)
-target = nil
-rev_target = nil
-
-for i=1,23 do
-  local r = deepcopy(rail)
-  r.da = PI / 12
-  if i == 1 or i == 13 then
-    r.len = 50
-    add_rail(RAILS,cr,r)
-    link_rails(cr, r, true, true, false)
-    local new_r = r
-    target = new_r  
-    r = deepcopy(rail)
-    r.len = 50
-    r.da = 0
-    add_rail(RAILS,new_r,r)
-    link_rails(new_r, r, true, true, false)
-  else
-    r.len=5.0
-    add_rail(RAILS,cr,r)
-    link_rails(cr, r, true, true, false)
-  end
-  -- if i == 13 then
-  --   target = r
-  -- end
-  if i == 1 then
-    rev_target = r
-  end
-  cr = r
-end
-
-link_rails(cr,start,true,true,false)
-loop_rails(cr,start)
+MINIMAP_POS=v2(50,50)
 
 train = {
   rail = nil,
@@ -766,44 +862,9 @@ train = {
 
 -- init
 
-r1 = deepcopy(rail)
-r1.da = -PI/12
-r1.len = 5
-add_rail(RAILS, target, r1)
-link_rails(target, r1, true, true, false, true)
-
-rt = make_turn(RAILS,r1,-PI/4,false)
-
-r2 = deepcopy(rail)
-r2.da = 0
-add_rail(RAILS, rt, r2)
-link_rails(rt, r2, true, true, false)
-r3 = deepcopy(rail)
-r3.da = 60 * PI / 180
-add_rail(RAILS, r2, r3)
-link_rails(r2, r3, true, true, false)
--- r2.next_active=2
-r4 = deepcopy(rail)
-r4.da = 0
-add_rail(RAILS, r2, r4)
-link_rails(r2, r4, true, true, false)
-r5 = deepcopy(rail)
-r5.da = 60 * PI / 180
-add_rail(RAILS, r3, r5)
-link_rails(r3, r5, true, true, false)
-r6 = deepcopy(rail)
-add_rail(RAILS, r5, r6)
-loop_rails(r6, r2)
-link_rails(r5, r6, true, true, false)
-link_rails(r6, rt, true, false, true)
-link_rails(rt, r6, true, false, true)
-rt.next_active=1
-r7 = make_turn(RAILS,rev_target,PI/2,true)
--- r7 = deepcopy(rail)
--- r7.da = PI / 6
--- add_rail(RAILS, rev_target, r7, true)
--- link_rails(r7, rev_target, true, true, false)
+start = init_rails(RAILS)
 train.rail = start
+-- train.rev=true
 
 win = false
 function game_win()
@@ -817,6 +878,12 @@ end
 function TIC()
   calls = 0
   cls(14)
+
+  if win then
+    local tw = print("WIN",W,H,1,true,4)
+    print ("WIN", (W - tw) / 2, H / 2,8,true,4)
+    return
+  end
 
   local delta = draw_train(train)
   draw_train_3d(train)
