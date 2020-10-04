@@ -123,7 +123,14 @@ cam={
   rz=0
 }
 
-function cam_proj( x,y,z )
+function in_viewport( x,y )
+  local xa,ya = rot_2d(x,y,cam.x,cam.y,PI/2)
+  local angle = -v2angle(v2(cam.x,cam.y), v2(xa,ya))
+  local ad = angle_dist(angle, cam.rz)
+  if math.abs(ad) >= PI/3 then return false else return true end
+end
+
+function cam_proj( x,y,z,verbose )
   local x1,y1,z1
 
   local dx,dy,dz = x - cam.x, y - cam.y, z - cam.z
@@ -139,10 +146,12 @@ end
 
 function cam_projv( v )
   local x1,y1,z1 = cam_proj(v.x,v.y,v.z)
+  if x1 == nil or y1 == nil or z1 == nil then return nil end
   return v3(x1,y1,z1)
 end
 
 function point_3d_proj( x1,y1,z1 )
+  if x1 == nil or y1 == nil or z1 == nil then return nil,nil end
   if z1 <= 0.00001 then return nil,nil end
 
   local x2d,y2d = x1/z1, y1/z1
@@ -166,6 +175,7 @@ function circ_3dv( v,r )
   local cpos = point_3dv(v)
   if cpos == nil then return nil,nil end
   local cproj = cam_projv(v)
+  if cproj == nil then return nil,nil end
   local tg_pos = v3add(cproj,v3(r,0,0))
   local tg_x,tg_y = point_3d_proj(tg_pos.x,tg_pos.y,tg_pos.z)
   if tg_x == nil or tg_y == nil then return nil,nil end
@@ -174,8 +184,12 @@ end
 
 calls = 0
 function line_3d( x1,y1,z1,x2,y2,z2,c )
+  if not in_viewport(x1,y1) and not in_viewport(x2,y2) then return end
+
   local xp1,yp1,zp1 = cam_proj(x1,y1,z1)
   local xp2,yp2,zp2 = cam_proj(x2,y2,z2)
+
+  if xp1 == nil or xp2 == nil then return end
 
   if zp1 <= 0.0001 and zp2 <= 0.0001 then return end
   -- adjust line length
@@ -217,6 +231,10 @@ function v3( x,y,z )
   return {x=x,y=y,z=z}
 end
 
+function v3h( x,y,z )
+  return {x=x,y=y,z=z,h=true}
+end
+
 function v223( v2,z )
   return {x=v2.x,y=v2.y,z=z}
 end
@@ -227,6 +245,10 @@ end
 
 function v3add( v1,v2 )
   return {x=v1.x+v2.x,y=v1.y+v2.y,z=v1.z+v2.z}
+end
+
+function v3mul( v1,n )
+  return {x=v1.x*n,y=v1.y*n,z=v1.z*n,h=v1.h}
 end
 
 function v3div( v3,n )
@@ -465,6 +487,7 @@ end
 
 tutor_rail = nil
 click_help_rail = nil
+fir_rails = {}
 function init_rails( rails )
   local R_LEN=50
 
@@ -493,6 +516,7 @@ function init_rails( rails )
   local r8 = make_straight(rails,r7,R_LEN)
   local r8a = make_straight(rails,r8,R_LEN)
   local r9 = make_straight(rails,r8a,R_LEN)
+  table.insert(fir_rails,r9)
 
   local r10 = make_turn(rails,r9,-PI/2)
 
@@ -520,6 +544,9 @@ function init_rails( rails )
 
   local r21 = make_turn(rails,r19,-PI/2,true)
   local r22 = make_turn(rails,r20,PI/2)
+
+  table.insert(fir_rails,r21)
+  table.insert(fir_rails,r22)
 
   loop_rails(r22,r21)
   link_rails(r22,r21,true,true,false)
@@ -892,6 +919,44 @@ octa_3d = {
   }
 }
 
+stump = v3(0.5,math.sqrt(3)/6,0)
+
+fir = {
+  vert = {
+    v3mul(v3(0,0,0.5),3),
+    v3mul(v3(1,0,0.5),3),
+    v3mul(v3(0.5,math.sqrt(3)/2,0.5),3),
+    v3mul(v3(0.5,math.sqrt(3)/6,1.5),3),
+    v3mul(v3(0,0,1.5),3),
+    v3mul(v3(1,0,1.5),3),
+    v3mul(v3(0.5,math.sqrt(3)/2,1.5),3),
+    v3mul(v3(0.5,math.sqrt(3)/6,2.5),3),
+    v3mul(v3add(stump,v3(0.1,0.1,0)),3),
+    v3mul(v3add(stump,v3(-0.1,0.1,0)),3),
+    v3mul(v3add(stump,v3(0.1,-0.1,0)),3),
+    v3mul(v3add(stump,v3(-0.1,-0.1,0)),3),
+    v3mul(v3add(stump,v3(0.1,0.1,0.5)),3),
+    v3mul(v3add(stump,v3(-0.1,0.1,0.5)),3),
+    v3mul(v3add(stump,v3(0.1,-0.1,0.5)),3),
+    v3mul(v3add(stump,v3(-0.1,-0.1,0.5)),3),
+  },
+  edges = {
+    {1,2,3,1},
+    {1,4},
+    {2,4},
+    {3,4},
+    {5,6,7,5},
+    {5,8},
+    {6,8},
+    {7,8},
+    {9,10,11,12},
+    {9,13},
+    {10,14},
+    {11,15},
+    {12,16}
+  }
+}
+
 center = {
   x = 1.5 * 3,
   y = 1.5 * 3,
@@ -935,8 +1000,8 @@ OBJS_3D = {
   octa_3d
 }
 
-MINIMAP_POS=v2(75,75)
 MINIMAP_SCALE=0.3
+MINIMAP_POS=v2(108/MINIMAP_SCALE,75)
 
 train = {
   rail = nil,
@@ -952,6 +1017,12 @@ train.rail = start
 -- train.rev=true
 move_fig(octa_3d, v223(finish.pos,1.5))
 center = v3add(center, v223(finish.pos,1.5))
+
+for i,v in ipairs(fir_rails) do
+  local f = deepcopy(fir)
+  table.insert(OBJS_3D,f)
+  move_fig(f,v223(v2add(v.pos,v2(10,4)),0))
+end
 
 cam.x = start.pos.x
 cam.y = start.pos.y
@@ -988,8 +1059,6 @@ function TIC()
     delta = draw_train(train)
   end
 
-  draw_train_3d(train)
-
   for i,v in ipairs(RAILS) do
     draw_rail_3d(v)
     if not win and not intro then
@@ -1004,6 +1073,8 @@ function TIC()
   for i,v in ipairs(OBJS_3D) do
     fig_3d(v)
   end
+
+  draw_train_3d(train)
 
   if not win and not intro and tutor_rail == nil then
     draw_buttons(BTNS)
