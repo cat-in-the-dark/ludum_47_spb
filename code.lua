@@ -48,6 +48,10 @@ end
 
 -- math
 
+function angle_dist( a,b )
+  return math.atan2(sin(a-b),cos(a-b))
+end
+
 function det( a,b,c,d )
   return a*d - b*c
 end
@@ -336,7 +340,7 @@ end
 
 function calc_rails( r )
   local end_pos = v2add(r.pos, v2(r.len * cos(r.angle), -1 * r.len * sin(r.angle)))
-  local rw = 4  -- rail width
+  local rw = 2  -- rail width
   local lnorm,rnorm = r.angle + PI / 2, r.angle - PI / 2
   local lstart,lend,rstart,rend,dl,dr
   dl = v2(rw * cos(lnorm), -rw * sin(lnorm))
@@ -355,27 +359,28 @@ function add_scale( m,p1,p2 )
   end
 end
 
-function make_rails_3d( ls,le,rs,re )
+function make_rails_3d( ls,le,rs,re,a )
+  local r_w = 1
   local model = deepcopy(obj_3d)
   local l1,l2,l3,l4,l5,l6,r1,r2,r3,r4,r5,r6
   l1 = v3(ls.x,ls.y,0)
   l2 = v3(le.x,le.y,0)
   fig3d_addv(model, l1,l2)
-  l3 = v3add(l1,v3(0,0,1))
-  l4 = v3add(l2,v3(0,0,1))
+  l3 = v3add(l1,v3(0,0,0.5))
+  l4 = v3add(l2,v3(0,0,0.5))
   fig3d_addv(model, l3,l4)
-  l5 = v3add(l3,v3(-1,0,0))
-  l6 = v3add(l4,v3(-1,0,0))
-  fig3d_addv(model, l5,l6)
+  -- l5 = v3add(l3,v3(r_w*cos(a+PI/2),r_w*sin(a+PI/2),0))
+  -- l6 = v3add(l4,v3(r_w*cos(a+PI/2),r_w*sin(a+PI/2),0))
+  -- fig3d_addv(model, l5,l6)
   r1 = v3(rs.x,rs.y,0)
   r2 = v3(re.x,re.y,0)
   fig3d_addv(model, r1,r2)
-  r3 = v3add(r1,v3(0,0,1))
-  r4 = v3add(r2,v3(0,0,1))
+  r3 = v3add(r1,v3(0,0,0.5))
+  r4 = v3add(r2,v3(0,0,0.5))
   fig3d_addv(model, r3,r4)
-  r5 = v3add(r3,v3(1,0,0))
-  r6 = v3add(r4,v3(1,0,0))
-  fig3d_addv(model, r5,r6)
+  -- r5 = v3add(r3,v3(r_w*cos(a-PI/2),r_w*sin(a-PI/2),0))
+  -- r6 = v3add(r4,v3(r_w*cos(a-PI/2),r_w*sin(a-PI/2),0))
+  -- fig3d_addv(model, r5,r6)
   return model
 end
 
@@ -425,7 +430,7 @@ function init_rail_gfx( r )
   table.insert(r.lines, {lstart,lend})
   table.insert(r.lines, {rstart,rend})
 
-  local rail_3d = make_rails_3d(lstart, lend, rstart, rend)
+  local rail_3d = make_rails_3d(lstart, lend, rstart, rend, r.angle)
   r.model = rail_3d
 end
 
@@ -522,16 +527,16 @@ function draw_train_3d( t )
   local r = t.rail
   local dist = 6
   local cpos = v2add(r.pos, v2(t.progress * cos(r.angle), -t.progress * sin(r.angle)))
-  local target_x = cpos.x - dist * cos(r.angle)
-  local target_y = cpos.y + dist * sin(r.angle)
-  local target_rz = -r.angle + PI / 2
+  local target_x = cpos.x --[[- dist * cos(r.angle)--]]
+  local target_y = cpos.y --[[+ dist * sin(r.angle)--]]
+  local target_rz = (-r.angle + PI / 2)
   if t.rev then target_rz = target_rz - PI end
-  da = (target_rz - cam.rz)
+  da = angle_dist(target_rz, cam.rz)
   dx = (target_x - cam.x)
   dy = (target_y - cam.y)
   -- cam.rz = target_rz
   local rate = 30
-  if (math.abs(cam.rz - target_rz) >= 0.0001) then
+  if (abs(angle_dist(target_rz, cam.rz)) >= 0.0001) then
     cam.rz = cam.rz + da / rate
   end
   if (math.abs(cam.x - target_x) >= 0.0001) then
@@ -645,7 +650,7 @@ rot_angle = {
 
 cam.x = 50
 cam.y = 100
-cam.z = 5
+cam.z = 2.5
 cam.rx = PI / 2
 cam.rz = PI / 2
 
@@ -762,13 +767,13 @@ function TIC()
 
   -- if win then return end
 
-  -- -- if key(KEY_R) then
     draw_train_3d(train)
     draw_buttons(BTNS)
     update_buttons(BTNS)
 
+  if key(KEY_R) then
     move_train(train)
-  -- -- end
+  end
 
   -- trace(calls)
 
