@@ -449,10 +449,14 @@ function draw_arrow( r,nxt,c,is_prev )
   local left,right,end_pos,center
   if is_prev then
     left,_,right,_,end_pos = calc_rails(r)
-    center = v2add(r.pos, v2(arr_len * cos(n.angle + PI), -arr_len*sin(n.angle + PI)))
+    local dc = v2(arr_len * cos(n.angle + PI), -arr_len*sin(n.angle + PI))
+    if nxt.rev then dc = v2mul(dc,-1) end
+    center = v2add(r.pos, dc)
   else
     _,left,_,right,end_pos = calc_rails(r)
-    center = v2add(end_pos, v2(arr_len * cos(n.angle), -arr_len*sin(n.angle)))
+    local dc = v2(arr_len * cos(n.angle), -arr_len*sin(n.angle))
+    if nxt.rev then dc = v2mul(dc,-1) end
+    center = v2add(end_pos, dc)
   end
   tri_3dv(v223(left,0),v223(right,0),v223(center,0),c)
 end
