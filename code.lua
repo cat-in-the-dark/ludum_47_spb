@@ -320,6 +320,27 @@ function fig3d_addv( f,v1,v2,hide_in_dist )
   return fig3d_add(f, {vert={v1,v2},edges={{1,2}}})
 end
 
+function create_tunnel()
+  local len=10
+  local dist=3
+  local seg_len=6
+
+  local fig = {}
+  for i=1,len do
+    local p = v3(0,i*dist,0)
+    local pts = {p}
+    for j=1,5 do
+      local angle = PI/2-PI/5*j
+      local np = v3(p.x + seg_len*cos(angle),i*dist,p.z+seg_len*sin(angle))
+      table.insert(pts,np)
+      p = np
+    end
+    fig3d_add(fig,{vert=pts,edges={{1,2,3,4,5}}})
+  end
+
+  return fig
+end
+
 function rot_2d( x0, y0, cx, cy, angle )
   local x1,y1,da,dist
   dist = v2dist(v2(cx,cy), v2(x0,y0))
@@ -506,12 +527,14 @@ function init_rails( rails )
 
   local r5 = make_straight(rails,r4,R_LEN)
   click_help_rail = r5
+  table.insert(fir_rails,r5)
   local r6 = make_straight(rails,r5,R_LEN)
 
   link_rails(r6,start,true,true,false)
   loop_rails(r6,start)
 
   local r7 = make_turn(rails,r5,-PI/2)
+  table.insert(fir_rails,r7)
 
   local r8 = make_straight(rails,r7,R_LEN)
   local r8a = make_straight(rails,r8,R_LEN)
@@ -540,7 +563,7 @@ function init_rails( rails )
   local r18 = make_turn(rails,r16,-PI/2,true)
 
   local r19 = make_straight(rails,r18,R_LEN,true)
-  local r20 = make_straight(rails,r17,R_LEN)
+  r20 = make_straight(rails,r17,R_LEN)
 
   local r21 = make_turn(rails,r19,-PI/2,true)
   local r22 = make_turn(rails,r20,PI/2)
@@ -923,22 +946,22 @@ stump = v3(0.5,math.sqrt(3)/6,0)
 
 fir = {
   vert = {
-    v3mul(v3(0,0,0.5),3),
-    v3mul(v3(1,0,0.5),3),
-    v3mul(v3(0.5,math.sqrt(3)/2,0.5),3),
-    v3mul(v3(0.5,math.sqrt(3)/6,1.5),3),
-    v3mul(v3(0,0,1.5),3),
-    v3mul(v3(1,0,1.5),3),
-    v3mul(v3(0.5,math.sqrt(3)/2,1.5),3),
-    v3mul(v3(0.5,math.sqrt(3)/6,2.5),3),
-    v3mul(v3add(stump,v3(0.1,0.1,0)),3),
-    v3mul(v3add(stump,v3(-0.1,0.1,0)),3),
-    v3mul(v3add(stump,v3(0.1,-0.1,0)),3),
-    v3mul(v3add(stump,v3(-0.1,-0.1,0)),3),
-    v3mul(v3add(stump,v3(0.1,0.1,0.5)),3),
-    v3mul(v3add(stump,v3(-0.1,0.1,0.5)),3),
-    v3mul(v3add(stump,v3(0.1,-0.1,0.5)),3),
-    v3mul(v3add(stump,v3(-0.1,-0.1,0.5)),3),
+    v3mul(v3(0,0,0.5),5),
+    v3mul(v3(1,0,0.5),5),
+    v3mul(v3(0.5,math.sqrt(3)/2,0.5),5),
+    v3mul(v3(0.5,math.sqrt(3)/6,1.2),5),
+    v3mul(v3(0,0,1.2),5),
+    v3mul(v3(1,0,1.2),5),
+    v3mul(v3(0.5,math.sqrt(3)/2,1.2),5),
+    v3mul(v3(0.5,math.sqrt(3)/6,1.9),5),
+    v3mul(v3add(stump,v3(0.1,0.1,0)),5),
+    v3mul(v3add(stump,v3(-0.1,0.1,0)),5),
+    v3mul(v3add(stump,v3(0.1,-0.1,0)),5),
+    v3mul(v3add(stump,v3(-0.1,-0.1,0)),5),
+    v3mul(v3add(stump,v3(0.1,0.1,0.5)),5),
+    v3mul(v3add(stump,v3(-0.1,0.1,0.5)),5),
+    v3mul(v3add(stump,v3(0.1,-0.1,0.5)),5),
+    v3mul(v3add(stump,v3(-0.1,-0.1,0.5)),5),
   },
   edges = {
     {1,2,3,1},
@@ -949,7 +972,7 @@ fir = {
     {5,8},
     {6,8},
     {7,8},
-    {9,10,11,12},
+    {9,10,12,11,9},
     {9,13},
     {10,14},
     {11,15},
@@ -1023,6 +1046,12 @@ for i,v in ipairs(fir_rails) do
   table.insert(OBJS_3D,f)
   move_fig(f,v223(v2add(v.pos,v2(10,4)),0))
 end
+
+-- tunnel = create_tunnel()
+-- rot_3d(tunnel,v3(0,0,0),{i=r20.angle-PI/2,j=0,k=0})
+-- move_fig(tunnel,v223(r20.pos,0))
+-- move_fig(tunnel,v3(0,-10,0))
+-- table.insert(OBJS_3D,tunnel)
 
 cam.x = start.pos.x
 cam.y = start.pos.y
