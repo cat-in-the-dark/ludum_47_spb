@@ -242,6 +242,11 @@ function v3dist( v1,v2 )
 end
 
 function line_3dv( v1,v2,c )
+  local thr = 45
+  if v1.h or v2.h then
+    local cpos = v3(cam.x,cam.y,cam.z)
+    if v3dist(cpos,v1) > thr and v3dist(cpos,v2) > thr then return end
+  end
   line_3d(v1.x,v1.y,v1.z,v2.x,v2.y,v2.z,c)
 end
 
@@ -258,7 +263,6 @@ function line_3dvv( vecs,c )
 end
 
 function fig_3d( fig,c )
-  if c == nil then c = 1 end
   for i,v in ipairs(fig.edges) do
     for j=1,#v-1 do
       line_3dv(fig.vert[v[j]], fig.vert[v[j+1]], 1)
@@ -286,7 +290,11 @@ function fig3d_add( f1,f2 )
   end
 end
 
-function fig3d_addv( f,v1,v2 )
+function fig3d_addv( f,v1,v2,hide_in_dist )
+  if hide_in_dist then
+    v1.h = true
+    v2.h = true
+  end
   return fig3d_add(f, {vert={v1,v2},edges={{1,2}}})
 end
 
@@ -439,7 +447,7 @@ function make_rails_3d( ls,le,rs,re,a )
   fig3d_addv(model, l1,l2)
   l3 = v3add(l1,v3(0,0,0.5))
   l4 = v3add(l2,v3(0,0,0.5))
-  fig3d_addv(model, l3,l4)
+  fig3d_addv(model, l3,l4,true)
   -- l5 = v3add(l3,v3(r_w*cos(a+PI/2),r_w*sin(a+PI/2),0))
   -- l6 = v3add(l4,v3(r_w*cos(a+PI/2),r_w*sin(a+PI/2),0))
   -- fig3d_addv(model, l5,l6)
@@ -448,7 +456,7 @@ function make_rails_3d( ls,le,rs,re,a )
   fig3d_addv(model, r1,r2)
   r3 = v3add(r1,v3(0,0,0.5))
   r4 = v3add(r2,v3(0,0,0.5))
-  fig3d_addv(model, r3,r4)
+  fig3d_addv(model, r3,r4,true)
   -- r5 = v3add(r3,v3(r_w*cos(a-PI/2),r_w*sin(a-PI/2),0))
   -- r6 = v3add(r4,v3(r_w*cos(a-PI/2),r_w*sin(a-PI/2),0))
   -- fig3d_addv(model, r5,r6)
@@ -456,6 +464,7 @@ function make_rails_3d( ls,le,rs,re,a )
 end
 
 tutor_rail = nil
+click_help_rail = nil
 function init_rails( rails )
   local R_LEN=50
 
@@ -473,6 +482,7 @@ function init_rails( rails )
   local r4 = make_turn(rails,r3,PI,false)
 
   local r5 = make_straight(rails,r4,R_LEN)
+  click_help_rail = r5
   local r6 = make_straight(rails,r5,R_LEN)
 
   link_rails(r6,start,true,true,false)
@@ -480,8 +490,9 @@ function init_rails( rails )
 
   local r7 = make_turn(rails,r5,-PI/2)
 
-  local r8 = make_straight(rails,r7,R_LEN*2)
-  local r9 = make_straight(rails,r8,R_LEN)
+  local r8 = make_straight(rails,r7,R_LEN)
+  local r8a = make_straight(rails,r8,R_LEN)
+  local r9 = make_straight(rails,r8a,R_LEN)
 
   local r10 = make_turn(rails,r9,-PI/2)
 
@@ -708,7 +719,7 @@ function move_train( t )
       if not t.rev then
         _,_,_,_,spos = calc_rails(r,true)
       end
-      if v2dist(spos,tpos) < 5 then
+      if v2dist(spos,tpos) < 5 and click_help_rail ~= nil then
         t.speed = sslow
       elseif v2dist(spos,tpos) < 15 then
         t.speed = slow
@@ -741,6 +752,9 @@ function move_train( t )
   end
   if old_rail ~= t.rail and old_rail == tutor_rail then
     tutor_rail = nil
+  end
+  if tutor_rail == nil and old_rail ~= t.rail and old_rail == click_help_rail then
+    click_help_rail = nil
   end
 end
 
@@ -792,6 +806,9 @@ function draw_buttons( btns )
   for i,v in ipairs(btns) do
     if v.active then
       circb(v.x,v.y,v.r,3)
+      if click_help_rail ~= nil then
+        print("Click to switch rails",v.x,v.y)
+      end
     end
   end
 end
