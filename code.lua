@@ -455,6 +455,7 @@ function make_rails_3d( ls,le,rs,re,a )
   return model
 end
 
+tutor_rail = nil
 function init_rails( rails )
   local R_LEN=50
 
@@ -466,6 +467,7 @@ function init_rails( rails )
   local r1 = make_turn(rails,start,PI,false)
 
   local r2 = make_straight(rails,r1,R_LEN)
+  tutor_rail = r2
   local r3 = make_straight(rails,r2,R_LEN)
 
   local r4 = make_turn(rails,r3,PI,false)
@@ -478,7 +480,7 @@ function init_rails( rails )
 
   local r7 = make_turn(rails,r5,-PI/2)
 
-  local r8 = make_straight(rails,r7,R_LEN)
+  local r8 = make_straight(rails,r7,R_LEN*2)
   local r9 = make_straight(rails,r8,R_LEN)
 
   local r10 = make_turn(rails,r9,-PI/2)
@@ -515,7 +517,7 @@ function init_rails( rails )
   loop_rails(r23,r19,true)
   link_rails(r19,r23,true,false,true)
   link_rails(r23,r19,true,false,true)
-  -- r19.next_active=2
+  r11.next_active=2
 
   local r24 = make_straight(rails,r20,R_LEN,true)
   link_rails(r24,r14,false,true,true)
@@ -529,7 +531,7 @@ function init_rails( rails )
   local finish = make_straight(rails,r26,5,true)
   finish.finish = true
 
-  return cr,finish
+  return r5,finish
 end
 
 function init_rail_gfx( r )
@@ -662,11 +664,7 @@ function update_switch_buttons( t,r )
   end
 end
 
-function draw_rail_3d( r,t,c )
-  -- rail
-  fig_3d(r.model)
-
-  -- switch
+function draw_switch_3d( r,t )
   if r.next ~= nil and #r.next > 1 and t.rail == r and not t.rev then
     local in_idx = 1
     if r.next_active == 1 then in_idx = 2 end
@@ -685,28 +683,44 @@ function draw_rail_3d( r,t,c )
   end
 end
 
+function draw_rail_3d( r )
+  fig_3d(r.model)
+end
+
 function move_train( t )
   local sp,slow,sslow = 0.4,0.2,0.1
   if t.rail.finish then
     game_win()
   end
-  if (t.rev and t.rail.prev ~= nil and #t.rail.prev > 1) or (not t.rev and t.rail.next ~= nil and #t.rail.next > 1) then
-    local r = t.rail
-    local tpos = v2add(r.pos, v2(t.progress * cos(r.angle), -t.progress * sin(r.angle)))
-    local spos = r.pos
-    if not t.rev then
-      _,_,_,_,spos = calc_rails(r,true)
-    end
-    if v2dist(spos,tpos) < 5 then
-      t.speed = sslow
-    elseif v2dist(spos,tpos) < 15 then
-      t.speed = slow
+
+  -- speed
+  if intro then
+    t.speed = 0.01
+  elseif t.rail == tutor_rail then
+    t.speed = 0.1
+  elseif tutor_rail ~= nil then
+    t.speed = 0.7
+  else
+    if (t.rev and t.rail.prev ~= nil and #t.rail.prev > 1) or (not t.rev and t.rail.next ~= nil and #t.rail.next > 1) then
+      local r = t.rail
+      local tpos = v2add(r.pos, v2(t.progress * cos(r.angle), -t.progress * sin(r.angle)))
+      local spos = r.pos
+      if not t.rev then
+        _,_,_,_,spos = calc_rails(r,true)
+      end
+      if v2dist(spos,tpos) < 5 then
+        t.speed = sslow
+      elseif v2dist(spos,tpos) < 15 then
+        t.speed = slow
+      else
+        t.speed = sp
+      end
     else
       t.speed = sp
     end
-  else
-    t.speed = sp
   end
+
+  local old_rail = t.rail
   if t.rev then
     t.progress = t.progress - t.speed
     if t.progress <= 0 then
@@ -725,6 +739,9 @@ function move_train( t )
       if t.rev then t.progress = t.rail.len else t.progress = 0 end
     end
   end
+  if old_rail ~= t.rail and old_rail == tutor_rail then
+    tutor_rail = nil
+  end
 end
 
 function draw_train( t )
@@ -740,17 +757,24 @@ dx = 0
 dy = 0
 function draw_train_3d( t )
   local r = t.rail
-  local dist = 6
   local cpos = v2add(r.pos, v2(t.progress * cos(r.angle), -t.progress * sin(r.angle)))
-  local target_x = cpos.x --[[- dist * cos(r.angle)--]]
-  local target_y = cpos.y --[[+ dist * sin(r.angle)--]]
-  local target_rz = (-r.angle + PI / 2)
+  local target_x = cpos.x
+  local target_y = cpos.y
+
+  local target_rz
+  if r == tutor_rail then
+    target_rz = -v2angle(cpos,center) + PI / 2
+  else
+    target_rz = -r.angle + PI / 2
+  end
   if t.rev then target_rz = target_rz - PI end
   da = angle_dist(target_rz, cam.rz)
   dx = (target_x - cam.x)
   dy = (target_y - cam.y)
   -- cam.rz = target_rz
   local rate = 30
+  if intro then rate = 50
+  elseif tutor_rail ~= nil then rate = 15 end 
   if (abs(angle_dist(target_rz, cam.rz)) >= 0.0001) then
     cam.rz = cam.rz + da / rate
   end
@@ -914,7 +938,7 @@ center = v3add(center, v223(finish.pos,1.5))
 
 cam.x = start.pos.x
 cam.y = start.pos.y
-cam.z = 5
+cam.z = 20
 cam.rz = (-start.angle + PI / 2)
 
 win = false
@@ -926,6 +950,10 @@ for i,v in ipairs(RAILS) do
   init_rail_gfx(v)
 end
 
+intro = true
+
+dzcam = 0
+target_camz = 5
 function TIC()
   calls = 0
   cls(11)
@@ -936,32 +964,69 @@ function TIC()
   if win then
     local tw = print("WIN",W,H,1,true,4)
     print ("WIN", (W - tw) / 2, H / 2,8,true,4)
-    fig_3d(octa_3d)
-    draw_train_3d(train)
-    for i,v in ipairs(RAILS) do
-      draw_rail_3d(v,train,i)
-    end
-    return
   end
 
-  local delta = draw_train(train)
+  local delta
+  if not win and not intro and tutor_rail == nil then
+    delta = draw_train(train)
+  end
+
   draw_train_3d(train)
 
   for i,v in ipairs(RAILS) do
-    draw_rail_3d(v,train,i)
-    draw_rail(v, delta, 15)
-    update_switch_buttons(train,v)
+    draw_rail_3d(v)
+    if not win and not intro then
+      if tutor_rail == nil then
+        draw_switch_3d(v,train)
+        draw_rail(v, delta, 15)
+        update_switch_buttons(train,v)
+      end
+    end
   end
 
   for i,v in ipairs(OBJS_3D) do
     fig_3d(v)
   end
 
-  draw_buttons(BTNS)
-  update_buttons(BTNS)
+  if not win and not intro and tutor_rail == nil then
+    draw_buttons(BTNS)
+    update_buttons(BTNS)
+  end
+
+  if intro then
+    local tw = print("Click to play",W,H,1,true,2)
+    print ("Click to play", (W - tw) / 2, H / 2,8,true,2)
+
+    dzcam = target_camz - cam.z
+    local rate = 70
+    if (math.abs(cam.z - target_camz) >= 0.0001) then
+      cam.z = cam.z + dzcam / rate
+    end
+
+    x,y,md = mouse()
+    if md then
+      intro = false
+      cam.z=5
+    end
+  end
+
+  if train.rail == tutor_rail then
+    local text
+    if train.progress < train.rail.len * 0.3 then
+      text = "What are you doing with your life?"
+    elseif train.progress < train.rail.len * 0.6 then
+      text = "Why are you stuck in a loop?"
+    else
+      text = "Don't you wanna try and break it?"
+    end
+    local w = print(text,W,H)
+    print(text,(W-w)/2,15)
+  end
 
   -- if key(KEY_R) then
-    move_train(train)
+    if not win then
+      move_train(train)
+    end
   -- end
 
   -- trace(calls)
