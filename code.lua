@@ -7,8 +7,8 @@ T = 8
 W = 240
 H = 136
 
-W3D=1.2
-H3D=0.65
+W3D=1.2*2
+H3D=0.65*2
 
 sf = string.format
 
@@ -137,6 +137,11 @@ function cam_proj( x,y,z )
   return x1,y1,z1
 end
 
+function cam_projv( v )
+  local x1,y1,z1 = cam_proj(v.x,v.y,v.z)
+  return v3(x1,y1,z1)
+end
+
 function point_3d_proj( x1,y1,z1 )
   if z1 <= 0.00001 then return nil,nil end
 
@@ -155,6 +160,16 @@ function point_3dv( v )
   local x,y = point_3d(v.x,v.y,v.z)
   if x == nil or y == nil then return nil end
   return v2(x,y)
+end
+
+function circ_3dv( v,r )
+  local cpos = point_3dv(v)
+  if cpos == nil then return nil,nil end
+  local cproj = cam_projv(v)
+  local tg_pos = v3add(cproj,v3(r,0,0))
+  local tg_x,tg_y = point_3d_proj(tg_pos.x,tg_pos.y,tg_pos.z)
+  if tg_x == nil or tg_y == nil then return nil,nil end
+  return cpos,v2dist(cpos,v2(tg_x,tg_y))
 end
 
 calls = 0
@@ -208,6 +223,10 @@ function v3divxy( v3,n )
   return {v3.x/n, v3.y/n, v3.z}
 end
 
+function v3dist( v1,v2 )
+  return math.sqrt((v1.x-v2.x)^2+(v1.y-v2.y)^2+(v1.z-v2.z)^2)
+end
+
 function line_3dv( v1,v2,c )
   line_3d(v1.x,v1.y,v1.z,v2.x,v2.y,v2.z,c)
 end
@@ -222,24 +241,6 @@ function line_3dvv( vecs,c )
   for i=1,#vecs-1 do
     line_3dv(vecs[i], vecs[i+1], c)
   end
-end
-
-function calc_circ_3dv( v,r )
-  local cx,cy = point_3d(v.x,v.y,v.z)
-  if cx == nil then return nil,nil,nil end
-  local dx=v3(r,0,0)
-  local p = v3add(v,dx)
-  local px,py = point_3d(p.x,p.y,p.z)
-  if px == nil then return nil,nil,nil end
-  local r2d = math.abs(px-cx)
-  return cx,cy,r2d
-end
-
-function circb_3dv( v,r,c )
-  local cx,cy,r2d = calc_circ_3dv(v,r)
-  if cx == nil then return nil,nil,nil end
-  circb(cx,cy,r2d,c)
-  return cx,cy,r2d
 end
 
 function rect_3d( x,y,z,w,h )
@@ -338,6 +339,26 @@ function loop_rails( r1, r2, reverse )
   r1.len = v2dist(r2.pos, r1.pos)
 end
 
+function make_turn( rails,p,angle,reverse )
+  local ca,da,len = 0,PI/12,5.0
+  if angle < 0 then da = -da end
+  local cr = p
+  while abs(angle_dist(ca,angle)) >= 0.01 do
+    ca = ca + da
+    local r = deepcopy(rail)
+    r.len = len
+    r.da = da
+    add_rail(rails, cr, r, reverse)
+    if reverse then
+      link_rails(r, cr, true, true, false)
+    else
+      link_rails(cr, r, true, true, false)
+    end
+    cr = r
+  end
+  return cr
+end
+
 function calc_rails( r )
   local end_pos = v2add(r.pos, v2(r.len * cos(r.angle), -1 * r.len * sin(r.angle)))
   local rw = 2  -- rail width
@@ -434,12 +455,15 @@ function init_rail_gfx( r )
   r.model = rail_3d
 end
 
-function draw_rail( r,c )
+function draw_rail( r,delta,c )
   for i,v in ipairs(r.lines) do
-    linev(v[1], v[2], c)
+    local v1,v2 = v2add(v[1],delta),v2add(v[2],delta)
+
+    linev(v1,v2, c)
   end
   for i,v in ipairs(r.circles) do
-    circv(v, 3, 3)
+    local v1 = v2add(v,delta)
+    circv(v1, 3, 3)
   end
 end
 
@@ -464,14 +488,22 @@ end
 function update_switch_buttons( t,r )
   if r.btn_next ~= nil then
     local _,_,_,_,end_pos = calc_rails(r)
-    local x,y,rad = calc_circ_3dv(v223(end_pos,0),4)
-    r.btn_next.active = x ~= nil and t.rail == r and not t.rev
-    r.btn_next.x, r.btn_next.y, r.btn_next.r = x,y,rad
+    local bpos,rad = circ_3dv(v223(end_pos,0),4)
+    if bpos ~= nil then
+      r.btn_next.active = t.rail == r and not t.rev
+      r.btn_next.x, r.btn_next.y, r.btn_next.r = bpos.x,bpos.y,rad
+    else
+      r.btn_next.active = false
+    end
   end
   if r.btn_prev ~= nil then
-    local x,y,rad = calc_circ_3dv(v223(r.pos,0),4)
-    r.btn_prev.active = x ~= nil and t.rail == r and t.rev
-    r.btn_prev.x, r.btn_prev.y, r.btn_prev.r = x,y,rad
+    local bpos,rad = circ_3dv(v223(r.pos,0),4)
+    if bpos ~= nil then
+      r.btn_prev.active = t.rail == r and t.rev
+      r.btn_prev.x, r.btn_prev.y, r.btn_prev.r = bpos.x,bpos.y,rad
+    else
+      r.btn_prev.active = false
+    end
   end
 end
 
@@ -521,7 +553,10 @@ end
 
 function draw_train( t )
   local r = t.rail
-  circv(v2add(r.pos, v2(t.progress * cos(r.angle), -t.progress * sin(r.angle))), 5,4)
+  local cpos = v2add(r.pos, v2(t.progress * cos(r.angle), -t.progress * sin(r.angle)))
+  local delta = v2add(TRAIN_SCR_POS, v2mul(cpos,-1))
+  circv(TRAIN_SCR_POS, 5,4)
+  return delta
 end
 
 da = 0
@@ -660,7 +695,7 @@ cam.rz = PI / 2
 
 rail = {
   da = 30.0 * PI / 180,
-  len = 50.0,
+  len = 40.0,
   pos = v2(50,100),
   next = nil,
   prev = nil,
@@ -682,22 +717,38 @@ RAILS = {}
 
 BTNS = {}
 
+TRAIN_SCR_POS=v2(50,50)
+
 cr = deepcopy(rail)
+cr.len = 5.0
 start = cr
 add_rail(RAILS, nil, cr)
 target = nil
 rev_target = nil
 
-for i=1,11 do
+for i=1,23 do
   local r = deepcopy(rail)
-  r.da = PI / 6
-  r.len=40.0
-  add_rail(RAILS,cr,r)
-  link_rails(cr, r, true, true, false)
-  if i == 1 then
-    target = r
+  r.da = PI / 12
+  if i == 1 or i == 13 then
+    r.len = 50
+    add_rail(RAILS,cr,r)
+    link_rails(cr, r, true, true, false)
+    local new_r = r
+    target = new_r  
+    r = deepcopy(rail)
+    r.len = 50
+    r.da = 0
+    add_rail(RAILS,new_r,r)
+    link_rails(new_r, r, true, true, false)
+  else
+    r.len=5.0
+    add_rail(RAILS,cr,r)
+    link_rails(cr, r, true, true, false)
   end
-  if i == 10 then
+  -- if i == 13 then
+  --   target = r
+  -- end
+  if i == 1 then
     rev_target = r
   end
   cr = r
@@ -716,13 +767,17 @@ train = {
 -- init
 
 r1 = deepcopy(rail)
-r1.da = 0
+r1.da = -PI/12
+r1.len = 5
 add_rail(RAILS, target, r1)
 link_rails(target, r1, true, true, false, true)
+
+rt = make_turn(RAILS,r1,-PI/4,false)
+
 r2 = deepcopy(rail)
 r2.da = 0
-add_rail(RAILS, r1, r2)
-link_rails(r1, r2, true, true, false)
+add_rail(RAILS, rt, r2)
+link_rails(rt, r2, true, true, false)
 r3 = deepcopy(rail)
 r3.da = 60 * PI / 180
 add_rail(RAILS, r2, r3)
@@ -740,13 +795,14 @@ r6 = deepcopy(rail)
 add_rail(RAILS, r5, r6)
 loop_rails(r6, r2)
 link_rails(r5, r6, true, true, false)
-link_rails(r6, r1, true, false, true)
-link_rails(r1, r6, true, false, true)
-r1.next_active=1
-r7 = deepcopy(rail)
-r7.da = 0
-add_rail(RAILS, rev_target, r7, true)
-link_rails(r7, rev_target, true, true, false)
+link_rails(r6, rt, true, false, true)
+link_rails(rt, r6, true, false, true)
+rt.next_active=1
+r7 = make_turn(RAILS,rev_target,PI/2,true)
+-- r7 = deepcopy(rail)
+-- r7.da = PI / 6
+-- add_rail(RAILS, rev_target, r7, true)
+-- link_rails(r7, rev_target, true, true, false)
 train.rail = start
 
 win = false
@@ -762,18 +818,17 @@ function TIC()
   calls = 0
   cls(14)
 
-  draw_train(train)
+  local delta = draw_train(train)
+  draw_train_3d(train)
+
   for i,v in ipairs(RAILS) do
     draw_rail_3d(v,train,i)
-    draw_rail(v, i % 8)
+    draw_rail(v, delta, i % 8)
     update_switch_buttons(train,v)
   end
 
-  -- if win then return end
-
-    draw_train_3d(train)
-    draw_buttons(BTNS)
-    update_buttons(BTNS)
+  draw_buttons(BTNS)
+  update_buttons(BTNS)
 
   if key(KEY_R) then
     move_train(train)
