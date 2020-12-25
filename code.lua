@@ -358,10 +358,30 @@ function move_fig( fig,dv )
 end
 
 function rot_3d( fig, cv, rot )
+  local cosa, sina = cos(rot.i), sin(rot.i)
+  local cosb, sinb = cos(rot.i), sin(rot.i)
+  local cosc, sinc = cos(rot.i), sin(rot.i)
+
+  local axx = cosa * cosb
+  local axy = cosa * sinb * sinc - sina * cosc
+  local axz = cosa * sinb * cosc + sina * sinc
+
+  local ayx = sina * cosb
+  local ayy = sina * sinb * sinc + cosa * cosc
+  local ayz = sina * sinb * cosc - cosa * sinc
+
+  local azx = -sinb
+  local azy = cosb * sinc
+  local azz = cosb * cosc
+
   for i,v in ipairs(fig.vert) do
-    v.x, v.y = rot_2d(v.x, v.y, cv.x, cv.y, rot.i)
-    v.x, v.z = rot_2d(v.x, v.z, cv.x, cv.z, rot.j)
-    v.y, v.z = rot_2d(v.y, v.z, cv.y, cv.z, rot.k)
+    local px = v.x - cv.x
+    local py = v.y - cv.y
+    local pz = v.z - cv.z
+
+    v.x = axx * px + axy * py + axz * pz + cv.x;
+    v.y = ayx * px + ayy * py + ayz * pz + cv.y;
+    v.z = azx * px + azy * py + azz * pz + cv.z;
   end
 end
 
