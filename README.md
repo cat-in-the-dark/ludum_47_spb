@@ -2,7 +2,7 @@
 
 ## Infinite Rails
 
-![](assets/gameplay_gif.gif)
+![Cover](assets/gameplay_gif.gif)
 
 Ludum Dare 47 Compo entry
 
